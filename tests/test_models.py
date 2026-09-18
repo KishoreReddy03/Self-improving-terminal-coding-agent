@@ -3,7 +3,7 @@
 import unittest
 from dataclasses import FrozenInstanceError
 
-from coding_agent.models import ToolCall
+from coding_agent.models import AgentConfig, ToolCall
 
 
 class TestToolCall(unittest.TestCase):
@@ -65,6 +65,49 @@ class TestToolCall(unittest.TestCase):
         tc = ToolCall(name="read_file")
         with self.assertRaises(FrozenInstanceError):
             tc.name = "other_name"  # type: ignore[misc]
+
+
+class TestAgentConfig(unittest.TestCase):
+    """Test AgentConfig model initialization and defaults."""
+
+    def test_default_agent_config(self):
+        """Verify default values for AgentConfig."""
+        config = AgentConfig()
+        self.assertEqual(config.api_key, "")
+        self.assertEqual(config.provider_url, "poolside/laguna-s-2.1:free")
+        self.assertEqual(config.model_name, "poolside/laguna-s-2.1:free")
+        self.assertEqual(config.max_tokens, 4096)
+        self.assertEqual(config.temperature, 0.7)
+        self.assertEqual(config.timeout, 60.0)
+        self.assertEqual(config.max_steps, 40)
+        self.assertIsNone(config.system_prompt)
+
+    def test_custom_agent_config(self):
+        """Verify custom field values for AgentConfig."""
+        config = AgentConfig(
+            api_key="test-key",
+            provider_url="https://api.openai.com/v1",
+            model_name="gpt-4o",
+            max_tokens=2048,
+            temperature=0.2,
+            timeout=30.0,
+            max_steps=10,
+            system_prompt="You are a helpful coding assistant.",
+        )
+        self.assertEqual(config.api_key, "test-key")
+        self.assertEqual(config.provider_url, "https://api.openai.com/v1")
+        self.assertEqual(config.model_name, "gpt-4o")
+        self.assertEqual(config.max_tokens, 2048)
+        self.assertEqual(config.temperature, 0.2)
+        self.assertEqual(config.timeout, 30.0)
+        self.assertEqual(config.max_steps, 10)
+        self.assertEqual(config.system_prompt, "You are a helpful coding assistant.")
+
+    def test_immutability(self):
+        """Verify AgentConfig fields cannot be reassigned."""
+        config = AgentConfig()
+        with self.assertRaises(FrozenInstanceError):
+            config.max_tokens = 100  # type: ignore[misc]
 
 
 if __name__ == "__main__":
