@@ -32,3 +32,17 @@ class ToolCall:
             arguments=dict(data.get("arguments") or {}),
             id=data.get("id"),
         )
+
+
+@dataclass(frozen=True)
+class AgentConfig:
+    """Runtime configuration settings for the agent."""
+
+    api_key: str = ""
+    provider_url: str = "poolside/laguna-s-2.1:free"
+    model_name: str = "poolside/laguna-s-2.1:free"
+    max_tokens: int = 4096
+    temperature: float = 0.7
+    timeout: float = 60.0
+    max_steps: int = 40
+    system_prompt: Optional[str] = None
