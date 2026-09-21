@@ -1,9 +1,11 @@
-"""Tests for tool abstraction module."""
+"""Tests for tool abstraction and concrete tool implementations."""
 
+import tempfile
 import unittest
+from pathlib import Path
 from typing import Any, Dict
 
-from coding_agent.tools import Tool
+from coding_agent.tools import ReadFileTool, Tool
 
 
 class DummyTool(Tool):
@@ -76,6 +78,32 @@ class TestToolAbstraction(unittest.TestCase):
             },
         }
         self.assertEqual(schema, expected)
+
+
+class TestReadFileTool(unittest.TestCase):
+    """Test ReadFileTool implementation and error handling."""
+
+    def setUp(self):
+        self.tool = ReadFileTool()
+
+    def test_tool_metadata(self):
+        """Verify metadata of ReadFileTool."""
+        self.assertEqual(self.tool.name, "read_file")
+        self.assertTrue(self.tool.is_read_only)
+        self.assertIn("path", self.tool.parameters["properties"])
+        self.assertEqual(self.tool.parameters["required"], ["path"])
+
+    def test_successful_file_read(self):
+        """Verify reading a valid text file returns its exact contents."""
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as tmp:
+            tmp.write("Hello, World!\nSecond line.")
+            tmp_path = tmp.name
+
+        try:
+            content = self.tool.execute(path=tmp_path)
+            self.assertEqual(content, "Hello, World!\nSecond line.")
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
 
 if __name__ == "__main__":
