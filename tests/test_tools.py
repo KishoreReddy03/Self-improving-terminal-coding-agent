@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from typing import Any, Dict
 
-from coding_agent.tools import ReadFileTool, Tool
+from coding_agent.tools import ReadFileTool, Tool, WriteFileTool
 
 
 class DummyTool(Tool):
@@ -132,6 +132,53 @@ class TestReadFileTool(unittest.TestCase):
             self.assertIn("Unable to decode file", result)
         finally:
             Path(tmp_path).unlink(missing_ok=True)
+
+
+class TestWriteFileTool(unittest.TestCase):
+    """Test WriteFileTool implementation and error handling."""
+
+    def setUp(self):
+        self.tool = WriteFileTool()
+
+    def test_tool_metadata(self):
+        """Verify metadata of WriteFileTool."""
+        self.assertEqual(self.tool.name, "write_file")
+        self.assertFalse(self.tool.is_read_only)
+        self.assertEqual(self.tool.parameters["required"], ["path", "content"])
+
+    def test_create_new_file_with_parent_directories(self):
+        """Verify writing creates new file and required parent directories."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            file_path = Path(tmp_dir) / "nested" / "folder" / "test.txt"
+            result = self.tool.execute(path=str(file_path), content="Hello, Nested World!")
+
+            self.assertIn("Successfully wrote", result)
+            self.assertTrue(file_path.exists())
+            self.assertEqual(file_path.read_text(encoding="utf-8"), "Hello, Nested World!")
+
+    def test_overwrite_existing_file(self):
+        """Verify writing overwrites existing file content."""
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as tmp:
+            tmp.write("Initial content")
+            tmp_path = tmp.name
+
+        try:
+            result = self.tool.execute(path=tmp_path, content="Overwritten content")
+            self.assertIn("Successfully wrote", result)
+            self.assertEqual(Path(tmp_path).read_text(encoding="utf-8"), "Overwritten content")
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+
+    def test_missing_path_parameter(self):
+        """Verify error message when path argument is empty."""
+        result = self.tool.execute(path="", content="some content")
+        self.assertIn("Error: 'path' parameter is required", result)
+
+    def test_directory_path_failure(self):
+        """Verify error message when target path is a directory."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            result = self.tool.execute(path=tmp_dir, content="content")
+            self.assertIn("is a directory, not a file", result)
 
 
 if __name__ == "__main__":
