@@ -105,6 +105,34 @@ class TestReadFileTool(unittest.TestCase):
         finally:
             Path(tmp_path).unlink(missing_ok=True)
 
+    def test_missing_path_parameter(self):
+        """Verify error message when path argument is empty."""
+        result = self.tool.execute(path="")
+        self.assertIn("Error: 'path' parameter is required", result)
+
+    def test_nonexistent_file(self):
+        """Verify error message when file does not exist."""
+        result = self.tool.execute(path="non_existent_file_12345.txt")
+        self.assertIn("Error: File 'non_existent_file_12345.txt' does not exist", result)
+
+    def test_directory_path_failure(self):
+        """Verify error message when path points to a directory."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            result = self.tool.execute(path=tmp_dir)
+            self.assertIn("is a directory, not a file", result)
+
+    def test_unicode_decode_error(self):
+        """Verify error message when reading non-UTF-8 binary content."""
+        with tempfile.NamedTemporaryFile("wb", delete=False) as tmp:
+            tmp.write(bytes([0x80, 0x81, 0xFE, 0xFF]))
+            tmp_path = tmp.name
+
+        try:
+            result = self.tool.execute(path=tmp_path)
+            self.assertIn("Unable to decode file", result)
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+
 
 if __name__ == "__main__":
     unittest.main()
