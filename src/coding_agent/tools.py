@@ -1,6 +1,7 @@
-"""Tool abstraction for the terminal coding agent."""
+"""Tool abstraction and implementations for the terminal coding agent."""
 
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 
@@ -43,3 +44,25 @@ class Tool(ABC):
                 "parameters": self.parameters,
             },
         }
+
+
+class ReadFileTool(Tool):
+    """Tool for reading text file contents from disk."""
+
+    name = "read_file"
+    description = "Read and return the text contents of a specified file."
+    parameters = {
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": "Relative or absolute file path to read.",
+            },
+        },
+        "required": ["path"],
+    }
+    is_read_only = True
+
+    def execute(self, path: str = "", **kwargs: Any) -> str:
+        """Read and return contents of a file."""
+        return ""
