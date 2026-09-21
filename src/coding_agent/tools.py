@@ -64,5 +64,23 @@ class ReadFileTool(Tool):
     is_read_only = True
 
     def execute(self, path: str = "", **kwargs: Any) -> str:
-        """Read and return contents of a file."""
-        return ""
+        """Read and return contents of a file cleanly handling error conditions."""
+        if not path:
+            return "Error: 'path' parameter is required."
+
+        target_path = Path(path)
+
+        if not target_path.exists():
+            return f"Error: File '{path}' does not exist."
+
+        if target_path.is_dir():
+            return f"Error: Path '{path}' is a directory, not a file."
+
+        try:
+            return target_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            return f"Error: Unable to decode file '{path}' as UTF-8 text."
+        except PermissionError:
+            return f"Error: Permission denied when accessing '{path}'."
+        except OSError as e:
+            return f"Error reading file '{path}': {e}"
