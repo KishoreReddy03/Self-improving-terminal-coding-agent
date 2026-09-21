@@ -125,3 +125,67 @@ class WriteFileTool(Tool):
             return f"Error: Permission denied when writing to '{path}'."
         except OSError as e:
             return f"Error writing to file '{path}': {e}"
+
+
+class EditFileTool(Tool):
+    """Tool for performing exact string replacement in a text file."""
+
+    name = "edit_file"
+    description = "Replace an exact string in a file with new content."
+    parameters = {
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": "Relative or absolute file path to edit.",
+            },
+            "old_str": {
+                "type": "string",
+                "description": "Exact text snippet to search for and replace.",
+            },
+            "new_str": {
+                "type": "string",
+                "description": "New text snippet to insert in place of old_str.",
+            },
+        },
+        "required": ["path", "old_str", "new_str"],
+    }
+    is_read_only = False
+
+    def execute(self, path: str = "", old_str: str = "", new_str: str = "", **kwargs: Any) -> str:
+        """Perform exact string replacement in the specified file."""
+        if not path:
+            return "Error: 'path' parameter is required."
+        if not old_str:
+            return "Error: 'old_str' parameter is required and cannot be empty."
+
+        target_path = Path(path)
+
+        if not target_path.exists():
+            return f"Error: File '{path}' does not exist."
+
+        if target_path.is_dir():
+            return f"Error: Path '{path}' is a directory, not a file."
+
+        try:
+            file_content = target_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            return f"Error: Unable to decode file '{path}' as UTF-8 text."
+        except PermissionError:
+            return f"Error: Permission denied when reading '{path}'."
+        except OSError as e:
+            return f"Error reading file '{path}': {e}"
+
+        count = file_content.count(old_str)
+        if count == 0:
+            return f"Error: Target text to replace was not found in '{path}'."
+
+        new_content = file_content.replace(old_str, new_str)
+
+        try:
+            target_path.write_text(new_content, encoding="utf-8")
+            return f"Successfully edited '{path}' (replaced {count} occurrence(s))."
+        except PermissionError:
+            return f"Error: Permission denied when writing to '{path}'."
+        except OSError as e:
+            return f"Error writing to file '{path}': {e}"
