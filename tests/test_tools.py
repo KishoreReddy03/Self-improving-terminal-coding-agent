@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from typing import Any, Dict
 
-from coding_agent.tools import ReadFileTool, Tool, WriteFileTool
+from coding_agent.tools import EditFileTool, ReadFileTool, Tool, WriteFileTool
 
 
 class DummyTool(Tool):
@@ -179,6 +179,62 @@ class TestWriteFileTool(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             result = self.tool.execute(path=tmp_dir, content="content")
             self.assertIn("is a directory, not a file", result)
+
+
+class TestEditFileTool(unittest.TestCase):
+    """Test EditFileTool implementation and exact string replacement."""
+
+    def setUp(self):
+        self.tool = EditFileTool()
+
+    def test_tool_metadata(self):
+        """Verify metadata of EditFileTool."""
+        self.assertEqual(self.tool.name, "edit_file")
+        self.assertFalse(self.tool.is_read_only)
+        self.assertEqual(self.tool.parameters["required"], ["path", "old_str", "new_str"])
+
+    def test_successful_string_replacement(self):
+        """Verify exact string replacement updates file correctly."""
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as tmp:
+            tmp.write("foo bar baz")
+            tmp_path = tmp.name
+
+        try:
+            result = self.tool.execute(path=tmp_path, old_str="bar", new_str="qux")
+            self.assertIn("Successfully edited", result)
+            self.assertEqual(Path(tmp_path).read_text(encoding="utf-8"), "foo qux baz")
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+
+    def test_target_text_not_found(self):
+        """Verify clear error message when target string is not present in file."""
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as tmp:
+            tmp.write("foo bar baz")
+            tmp_path = tmp.name
+
+        try:
+            result = self.tool.execute(path=tmp_path, old_str="non_existent", new_str="replacement")
+            self.assertIn("Target text to replace was not found", result)
+            self.assertEqual(Path(tmp_path).read_text(encoding="utf-8"), "foo bar baz")
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+
+    def test_missing_old_str_parameter(self):
+        """Verify error message when old_str argument is empty."""
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as tmp:
+            tmp.write("content")
+            tmp_path = tmp.name
+
+        try:
+            result = self.tool.execute(path=tmp_path, old_str="", new_str="new")
+            self.assertIn("Error: 'old_str' parameter is required", result)
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+
+    def test_nonexistent_file(self):
+        """Verify error message when file to edit does not exist."""
+        result = self.tool.execute(path="missing_file_xyz.txt", old_str="a", new_str="b")
+        self.assertIn("Error: File 'missing_file_xyz.txt' does not exist", result)
 
 
 if __name__ == "__main__":
