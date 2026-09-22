@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Optional
 
-from coding_agent.tools import Tool
+from coding_agent.tools import EditFileTool, ReadFileTool, Tool, WriteFileTool
 
 
 class ToolRegistry:
@@ -36,3 +36,12 @@ class ToolRegistry:
     def __len__(self) -> int:
         """Return the number of registered tools."""
         return len(self._tools)
+
+    @classmethod
+    def create_default(cls) -> "ToolRegistry":
+        """Construct a ToolRegistry instance pre-populated with standard built-in tools."""
+        registry = cls()
+        registry.register(ReadFileTool())
+        registry.register(WriteFileTool())
+        registry.register(EditFileTool())
+        return registry
