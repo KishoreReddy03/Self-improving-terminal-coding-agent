@@ -4,7 +4,7 @@ import unittest
 from typing import Any
 
 from coding_agent.registry import ToolRegistry
-from coding_agent.tools import EditFileTool, ReadFileTool, Tool, WriteFileTool
+from coding_agent.tools import EditFileTool, ReadFileTool, ShellCommandTool, Tool, WriteFileTool
 
 
 class MockTool(Tool):
@@ -61,19 +61,21 @@ class TestToolRegistry(unittest.TestCase):
         """Verify default registry is pre-populated with expected built-in tools."""
         registry = ToolRegistry.create_default()
 
-        self.assertEqual(len(registry), 3)
+        self.assertEqual(len(registry), 4)
         self.assertIn("read_file", registry)
         self.assertIn("write_file", registry)
         self.assertIn("edit_file", registry)
+        self.assertIn("shell_command", registry)
 
         self.assertIsInstance(registry.get("read_file"), ReadFileTool)
         self.assertIsInstance(registry.get("write_file"), WriteFileTool)
         self.assertIsInstance(registry.get("edit_file"), EditFileTool)
+        self.assertIsInstance(registry.get("shell_command"), ShellCommandTool)
 
         schemas = registry.get_schemas()
-        self.assertEqual(len(schemas), 3)
+        self.assertEqual(len(schemas), 4)
         schema_names = {s["function"]["name"] for s in schemas}
-        self.assertEqual(schema_names, {"read_file", "write_file", "edit_file"})
+        self.assertEqual(schema_names, {"read_file", "write_file", "edit_file", "shell_command"})
 
 
 if __name__ == "__main__":
