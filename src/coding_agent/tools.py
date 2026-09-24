@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 from pathlib import Path
+import subprocess
 from typing import Any, Dict, Optional
 
 
@@ -189,3 +190,101 @@ class EditFileTool(Tool):
             return f"Error: Permission denied when writing to '{path}'."
         except OSError as e:
             return f"Error writing to file '{path}': {e}"
+
+
+class ShellCommandTool(Tool):
+    """Tool for executing shell commands and capturing output and status."""
+
+    name = "shell_command"
+    description = (
+        "Execute a shell command, capture stdout and stderr, and return exit status and output."
+    )
+    parameters = {
+        "type": "object",
+        "properties": {
+            "command": {
+                "type": "string",
+                "description": "Shell command to execute.",
+            },
+            "timeout": {
+                "type": "number",
+                "description": "Optional maximum execution time in seconds (default: 30.0).",
+            },
+        },
+        "required": ["command"],
+    }
+    is_read_only = False
+
+    def __init__(
+        self,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        parameters: Optional[Dict[str, Any]] = None,
+        is_read_only: Optional[bool] = None,
+        default_timeout: float = 30.0,
+    ) -> None:
+        super().__init__(
+            name=name,
+            description=description,
+            parameters=parameters,
+            is_read_only=is_read_only,
+        )
+        self.default_timeout = default_timeout
+
+    def execute(
+        self, command: str = "", timeout: Optional[float] = None, **kwargs: Any
+    ) -> Dict[str, Any]:
+        """Execute a shell command safely capturing output and handling timeouts."""
+        if not command or not command.strip():
+            return {
+                "exit_code": -1,
+                "exit_status": -1,
+                "stdout": "",
+                "stderr": "Error: 'command' parameter is required and cannot be empty.",
+            }
+
+        exec_timeout = float(timeout) if timeout is not None else self.default_timeout
+
+        try:
+            completed = subprocess.run(
+                command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=exec_timeout,
+            )
+            return {
+                "exit_code": completed.returncode,
+                "exit_status": completed.returncode,
+                "stdout": completed.stdout,
+                "stderr": completed.stderr,
+            }
+        except subprocess.TimeoutExpired as e:
+            stdout_str = (
+                e.stdout
+                if isinstance(e.stdout, str)
+                else (e.stdout.decode("utf-8", errors="replace") if e.stdout else "")
+            )
+            stderr_str = (
+                e.stderr
+                if isinstance(e.stderr, str)
+                else (e.stderr.decode("utf-8", errors="replace") if e.stderr else "")
+            )
+            error_msg = f"Error: Command timed out after {exec_timeout} seconds."
+            full_stderr = f"{stderr_str}\n{error_msg}".strip() if stderr_str else error_msg
+            return {
+                "exit_code": -1,
+                "exit_status": -1,
+                "stdout": stdout_str,
+                "stderr": full_stderr,
+            }
+        except Exception as e:
+            return {
+                "exit_code": -1,
+                "exit_status": -1,
+                "stdout": "",
+                "stderr": f"Error executing command: {e}",
+            }
+
