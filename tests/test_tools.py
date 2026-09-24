@@ -1,11 +1,12 @@
 """Tests for tool abstraction and concrete tool implementations."""
 
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Any, Dict
 
-from coding_agent.tools import EditFileTool, ReadFileTool, Tool, WriteFileTool
+from coding_agent.tools import EditFileTool, ReadFileTool, ShellCommandTool, Tool, WriteFileTool
 
 
 class DummyTool(Tool):
@@ -237,5 +238,68 @@ class TestEditFileTool(unittest.TestCase):
         self.assertIn("Error: File 'missing_file_xyz.txt' does not exist", result)
 
 
+class TestShellCommandTool(unittest.TestCase):
+    """Test ShellCommandTool execution, output capture, and timeout behavior."""
+
+    def setUp(self):
+        self.tool = ShellCommandTool()
+
+    def test_tool_metadata(self):
+        """Verify metadata of ShellCommandTool."""
+        self.assertEqual(self.tool.name, "shell_command")
+        self.assertFalse(self.tool.is_read_only)
+        self.assertEqual(self.tool.parameters["required"], ["command"])
+        self.assertIn("command", self.tool.parameters["properties"])
+        self.assertIn("timeout", self.tool.parameters["properties"])
+
+    def test_successful_command_execution(self):
+        """Verify standard command execution captures stdout and exit status."""
+        cmd = f'"{sys.executable}" -c "print(\'Hello Shell Tool\')"'
+        result = self.tool.execute(command=cmd)
+
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result["exit_code"], 0)
+        self.assertEqual(result["exit_status"], 0)
+        self.assertIn("Hello Shell Tool", result["stdout"])
+        self.assertEqual(result["stderr"], "")
+
+    def test_command_with_stderr_and_failure(self):
+        """Verify execution captures stderr and non-zero exit code."""
+        cmd = f'"{sys.executable}" -c "import sys; sys.stderr.write(\'test error\'); sys.exit(42)"'
+        result = self.tool.execute(command=cmd)
+
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result["exit_code"], 42)
+        self.assertEqual(result["exit_status"], 42)
+        self.assertIn("test error", result["stderr"])
+
+    def test_command_timeout(self):
+        """Verify command timing out terminates execution and returns timeout error."""
+        cmd = f'"{sys.executable}" -c "import time; time.sleep(2)"'
+        result = self.tool.execute(command=cmd, timeout=0.1)
+
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result["exit_code"], -1)
+        self.assertIn("timed out after 0.1 seconds", result["stderr"])
+
+    def test_custom_default_timeout(self):
+        """Verify tool instance default timeout is applied when no timeout kwarg is given."""
+        short_tool = ShellCommandTool(default_timeout=0.1)
+        cmd = f'"{sys.executable}" -c "import time; time.sleep(2)"'
+        result = short_tool.execute(command=cmd)
+
+        self.assertEqual(result["exit_code"], -1)
+        self.assertIn("timed out after 0.1 seconds", result["stderr"])
+
+    def test_missing_or_empty_command(self):
+        """Verify error when command argument is empty or whitespace."""
+        result = self.tool.execute(command="  ")
+
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result["exit_code"], -1)
+        self.assertIn("Error: 'command' parameter is required", result["stderr"])
+
+
 if __name__ == "__main__":
     unittest.main()
+
