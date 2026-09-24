@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Optional
 
-from coding_agent.tools import EditFileTool, ReadFileTool, Tool, WriteFileTool
+from coding_agent.tools import EditFileTool, ReadFileTool, ShellCommandTool, Tool, WriteFileTool
 
 
 class ToolRegistry:
@@ -44,4 +44,5 @@ class ToolRegistry:
         registry.register(ReadFileTool())
         registry.register(WriteFileTool())
         registry.register(EditFileTool())
+        registry.register(ShellCommandTool())
         return registry
