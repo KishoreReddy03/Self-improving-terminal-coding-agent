@@ -1,7 +1,7 @@
 """Data models for the terminal coding agent."""
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 @dataclass(frozen=True)
@@ -35,6 +35,19 @@ class ToolCall:
 
 
 @dataclass(frozen=True)
+class ModelResponse:
+    """Represents a structured response returned by the LLM client layer."""
+
+    content: Optional[str] = None
+    tool_calls: List[ToolCall] = field(default_factory=list)
+    raw_response: Optional[Dict[str, Any]] = None
+
+    def has_tool_calls(self) -> bool:
+        """Check if the model response contains tool call requests."""
+        return len(self.tool_calls) > 0
+
+
+@dataclass(frozen=True)
 class AgentConfig:
     """Runtime configuration settings for the agent."""
 
@@ -46,3 +59,4 @@ class AgentConfig:
     timeout: float = 60.0
     max_steps: int = 40
     system_prompt: Optional[str] = None
+
