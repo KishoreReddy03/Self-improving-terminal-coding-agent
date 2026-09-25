@@ -6,6 +6,7 @@ import urllib.request
 from typing import Any, Callable, Dict, List, Optional
 
 from coding_agent.models import AgentConfig, ModelResponse, ToolCall
+from coding_agent.parser import ResponseParser
 
 
 class LLMClient:
@@ -89,35 +90,4 @@ class LLMClient:
 
     def _parse_response(self, raw_response: Dict[str, Any]) -> ModelResponse:
         """Parse raw API JSON response dictionary into a structured ModelResponse."""
-        choices = raw_response.get("choices", [])
-        if not choices:
-            return ModelResponse(content=None, tool_calls=[], raw_response=raw_response)
-
-        message = choices[0].get("message", {})
-        content = message.get("content")
-
-        parsed_tool_calls: List[ToolCall] = []
-        raw_tool_calls = message.get("tool_calls", [])
-        for tc in raw_tool_calls:
-            tc_id = tc.get("id")
-            func_data = tc.get("function", {})
-            name = func_data.get("name", "")
-            args_raw = func_data.get("arguments", {})
-
-            if isinstance(args_raw, str):
-                try:
-                    args = json.loads(args_raw) if args_raw.strip() else {}
-                except json.JSONDecodeError:
-                    args = {"raw_arguments": args_raw}
-            elif isinstance(args_raw, dict):
-                args = args_raw
-            else:
-                args = {}
-
-            parsed_tool_calls.append(ToolCall(name=name, arguments=args, id=tc_id))
-
-        return ModelResponse(
-            content=content,
-            tool_calls=parsed_tool_calls,
-            raw_response=raw_response,
-        )
+        return ResponseParser.parse(raw_response)
