@@ -1,8 +1,9 @@
 """Terminal Coding Agent package."""
 
+from coding_agent.agent import Agent
 from coding_agent.client import LLMClient
 from coding_agent.config import Config, load_config_from_env
-from coding_agent.models import AgentConfig, ModelResponse, ToolCall
+from coding_agent.models import AgentConfig, AgentResult, ModelResponse, ToolCall
 from coding_agent.parser import ResponseParser, StreamToolCallAccumulator
 from coding_agent.registry import ToolRegistry
 from coding_agent.tools import EditFileTool, ReadFileTool, ShellCommandTool, Tool, WriteFileTool
@@ -10,7 +11,9 @@ from coding_agent.tools import EditFileTool, ReadFileTool, ShellCommandTool, Too
 __version__ = "0.1.0"
 
 __all__ = [
+    "Agent",
     "AgentConfig",
+    "AgentResult",
     "Config",
     "EditFileTool",
     "LLMClient",
