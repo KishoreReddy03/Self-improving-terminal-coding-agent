@@ -60,3 +60,14 @@ class AgentConfig:
     max_steps: int = 40
     system_prompt: Optional[str] = None
 
+
+@dataclass(frozen=True)
+class AgentResult:
+    """Result returned by running the core agent loop."""
+
+    final_response: Optional[str] = None
+    messages: List[Dict[str, Any]] = field(default_factory=list)
+    steps_taken: int = 0
+    completed: bool = True
+
+
