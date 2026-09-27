@@ -80,9 +80,30 @@ def run_interactive_session(agent: Agent, start_in_plan_mode: bool = False) -> i
 
 def main(args: Optional[List[str]] = None) -> int:
     """Main CLI execution entry point."""
-    config = load_config_from_env()
+    parser = argparse.ArgumentParser(description="Terminal Coding Agent CLI")
+    parser.add_argument("prompt", nargs="?", help="Optional single prompt to execute non-interactively")
+    parser.add_argument("--plan", action="store_true", help="Start in plan mode")
+    parser.add_argument("--env-file", help="Path to custom .env file")
+
+    parsed_args = parser.parse_args(args)
+
+    config = load_config_from_env(env_path=parsed_args.env_file if parsed_args.env_file else None)
     agent = Agent(config=config)
-    return run_interactive_session(agent)
+
+    print("Terminal Coding Agent initialized successfully.")
+    print(f"Model Provider URL: {config.provider_url}")
+    print(f"Model Name:         {config.model_name}")
+
+    if parsed_args.prompt:
+        user_content = parsed_args.prompt
+        if parsed_args.plan:
+            user_content += PLAN_MODE_DIRECTIVE
+        result = agent.run(user_content)
+        if result.final_response:
+            print(f"\n{result.final_response}")
+        return 0
+
+    return run_interactive_session(agent, start_in_plan_mode=parsed_args.plan)
 
 
 if __name__ == "__main__":
