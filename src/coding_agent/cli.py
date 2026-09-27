@@ -29,6 +29,9 @@ def run_interactive_session(agent: Agent, start_in_plan_mode: bool = False) -> i
         prompt_prefix = "[PLAN] agent> " if plan_mode else "agent> "
         try:
             user_input = input(prompt_prefix).strip()
+        except KeyboardInterrupt:
+            print("\nKeyboardInterrupt (type /exit or press Ctrl-D to quit)")
+            continue
         except EOFError:
             print("\nGoodbye!")
             break
