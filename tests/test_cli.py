@@ -87,6 +87,19 @@ class TestCLI(unittest.TestCase):
             self.assertIn("Conversation history cleared", output)
             self.assertEqual(mock_agent.run.call_count, 2)
 
+    @patch("builtins.input", side_effect=[KeyboardInterrupt, EOFError])
+    def test_signal_handling(self, mock_input):
+        """Verify KeyboardInterrupt is handled without crash and EOFError exits cleanly."""
+        mock_agent = MagicMock()
+
+        with patch("sys.stdout", new=io.StringIO()) as fake_out:
+            code = run_interactive_session(mock_agent)
+
+            self.assertEqual(code, 0)
+            output = fake_out.getvalue()
+            self.assertIn("KeyboardInterrupt (type /exit or press Ctrl-D to quit)", output)
+            self.assertIn("Goodbye!", output)
+
 
 if __name__ == "__main__":
     unittest.main()
