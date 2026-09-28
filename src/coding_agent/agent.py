@@ -119,6 +119,19 @@ class Agent:
                     # Policy 1: Plan Mode disables write-capable operations
                     if is_plan_mode and not tool.is_read_only:
                         tool_output = f"Error: Tool '{tool.name}' is disabled in plan mode."
+
+                    # Policy 2: Write-capable tools require user approval unless auto_approve is set
+                    elif not tool.is_read_only and not is_auto_approve:
+                        approved = cb(tool.name, kwargs)
+                        if not approved:
+                            tool_output = f"Error: Execution of tool '{tool.name}' was denied by user."
+                        else:
+                            try:
+                                tool_output = tool.execute(**kwargs)
+                            except Exception as e:
+                                tool_output = f"Error executing tool '{tool.name}': {e}"
+
+                    # Policy 3: Read-only tools or auto-approved write tools execute normally
                     else:
                         try:
                             tool_output = tool.execute(**kwargs)
