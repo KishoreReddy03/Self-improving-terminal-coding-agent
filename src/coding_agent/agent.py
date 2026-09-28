@@ -1,11 +1,25 @@
 """Core agent loop logic for executing reasoning and tool calls."""
 
 import json
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 from coding_agent.client import LLMClient
 from coding_agent.models import AgentConfig, AgentResult, ModelResponse
 from coding_agent.registry import ToolRegistry
+
+ApprovalCallback = Callable[[str, Dict[str, Any]], bool]
+
+
+def default_terminal_approval(tool_name: str, kwargs: Dict[str, Any]) -> bool:
+    """Default interactive terminal approval callback for write-capable tool execution."""
+    print(f"\n[APPROVAL REQUIRED] Tool: '{tool_name}'")
+    if kwargs:
+        print(f"Arguments: {json.dumps(kwargs, indent=2)}")
+    try:
+        choice = input("Approve execution? (y/N): ").strip().lower()
+        return choice in ("y", "yes")
+    except (KeyboardInterrupt, EOFError):
+        return False
 
 
 class Agent:
@@ -16,15 +30,24 @@ class Agent:
         client: Optional[LLMClient] = None,
         registry: Optional[ToolRegistry] = None,
         config: Optional[AgentConfig] = None,
+        auto_approve: bool = False,
+        plan_mode: bool = False,
+        approval_callback: Optional[ApprovalCallback] = None,
     ) -> None:
         self.config = config or (client.config if client else AgentConfig())
         self.client = client or LLMClient(config=self.config)
         self.registry = registry or ToolRegistry.create_default()
+        self.auto_approve = auto_approve
+        self.plan_mode = plan_mode
+        self.approval_callback = approval_callback or default_terminal_approval
 
     def run(
         self,
         conversation_or_prompt: Union[List[Dict[str, Any]], str],
         max_steps: Optional[int] = None,
+        plan_mode: Optional[bool] = None,
+        auto_approve: Optional[bool] = None,
+        approval_callback: Optional[ApprovalCallback] = None,
     ) -> AgentResult:
         """Run the core agent loop until a final response is generated or max_steps is reached."""
         if isinstance(conversation_or_prompt, str):
@@ -38,6 +61,10 @@ class Agent:
                 messages.insert(0, {"role": "system", "content": self.config.system_prompt})
 
         limit = max_steps if max_steps is not None else self.config.max_steps
+        is_plan_mode = plan_mode if plan_mode is not None else self.plan_mode
+        is_auto_approve = auto_approve if auto_approve is not None else self.auto_approve
+        cb = approval_callback or self.approval_callback
+
         steps = 0
         last_response_content: Optional[str] = None
 
