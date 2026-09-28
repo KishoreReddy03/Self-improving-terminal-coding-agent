@@ -68,7 +68,7 @@ def run_interactive_session(agent: Agent, start_in_plan_mode: bool = False) -> i
         conversation.append({"role": "user", "content": message_content})
 
         try:
-            result = agent.run(conversation)
+            result = agent.run(conversation, plan_mode=plan_mode)
             conversation = result.messages
             if result.final_response:
                 print(f"\n{result.final_response}\n")
@@ -83,12 +83,13 @@ def main(args: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Terminal Coding Agent CLI")
     parser.add_argument("prompt", nargs="?", help="Optional single prompt to execute non-interactively")
     parser.add_argument("--plan", action="store_true", help="Start in plan mode")
+    parser.add_argument("--auto-approve", action="store_true", help="Auto approve write-capable tools without prompting")
     parser.add_argument("--env-file", help="Path to custom .env file")
 
     parsed_args = parser.parse_args(args)
 
     config = load_config_from_env(env_path=parsed_args.env_file if parsed_args.env_file else None)
-    agent = Agent(config=config)
+    agent = Agent(config=config, auto_approve=parsed_args.auto_approve, plan_mode=parsed_args.plan)
 
     print("Terminal Coding Agent initialized successfully.")
     print(f"Model Provider URL: {config.provider_url}")
@@ -98,7 +99,7 @@ def main(args: Optional[List[str]] = None) -> int:
         user_content = parsed_args.prompt
         if parsed_args.plan:
             user_content += PLAN_MODE_DIRECTIVE
-        result = agent.run(user_content)
+        result = agent.run(user_content, plan_mode=parsed_args.plan)
         if result.final_response:
             print(f"\n{result.final_response}")
         return 0
