@@ -298,6 +298,36 @@ class TestAgentLoop(unittest.TestCase):
         tool_msg = [m for m in result.messages if m["role"] == "tool"][0]
         self.assertIn("was denied by user", tool_msg["content"])
 
+    def test_auto_approval_option(self):
+        """Verify auto_approve=True executes write tool without prompting approval callback."""
+        write_tool = FakeTool(name="write_file", return_value="auto written")
+        write_tool.is_read_only = False
+        registry = ToolRegistry()
+        registry.register(write_tool)
+
+        approval_called = False
+
+        def mock_approval(name, kwargs):
+            nonlocal approval_called
+            approval_called = True
+            return False
+
+        responses = [
+            ModelResponse(
+                content="Writing file.",
+                tool_calls=[ToolCall(name="write_file", arguments={"path": "c.txt"}, id="call_auto")],
+            ),
+            ModelResponse(content="Done."),
+        ]
+        client = FakeLLMClient(responses)
+        agent = Agent(client=client, registry=registry, auto_approve=True, approval_callback=mock_approval)
+
+        result = agent.run("Write file")
+
+        self.assertTrue(result.completed)
+        self.assertFalse(approval_called)
+        self.assertEqual(len(write_tool.calls), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
