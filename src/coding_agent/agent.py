@@ -115,10 +115,15 @@ class Agent:
                     tool_output = f"Error: Tool '{tc.name}' not found."
                 else:
                     kwargs = tc.arguments if isinstance(tc.arguments, dict) else {}
-                    try:
-                        tool_output = tool.execute(**kwargs)
-                    except Exception as e:
-                        tool_output = f"Error executing tool '{tc.name}': {e}"
+
+                    # Policy 1: Plan Mode disables write-capable operations
+                    if is_plan_mode and not tool.is_read_only:
+                        tool_output = f"Error: Tool '{tool.name}' is disabled in plan mode."
+                    else:
+                        try:
+                            tool_output = tool.execute(**kwargs)
+                        except Exception as e:
+                            tool_output = f"Error executing tool '{tool.name}': {e}"
 
                 if not isinstance(tool_output, str):
                     tool_output = json.dumps(tool_output)
