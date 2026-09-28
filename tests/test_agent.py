@@ -13,11 +13,12 @@ from coding_agent.tools import Tool
 class FakeTool(Tool):
     """Fake tool implementation for testing agent loop tool execution."""
 
-    def __init__(self, name: str, return_value: Any = "success") -> None:
+    def __init__(self, name: str, return_value: Any = "success", is_read_only: bool = True) -> None:
         super().__init__(
             name=name,
             description=f"Fake tool {name}",
             parameters={"type": "object", "properties": {"arg": {"type": "string"}}},
+            is_read_only=is_read_only,
         )
         self.return_value = return_value
         self.calls: List[Dict[str, Any]] = []
@@ -209,6 +210,95 @@ class TestAgentLoop(unittest.TestCase):
         self.assertEqual(first_msg["role"], "system")
         self.assertEqual(first_msg["content"], "You are a senior python developer.")
 
+    def test_read_only_tool_executes_normally_without_approval(self):
+        """Verify read-only tools execute automatically without invoking approval callback."""
+        read_tool = FakeTool(name="read_file", return_value="content")
+        read_tool.is_read_only = True
+        registry = ToolRegistry()
+        registry.register(read_tool)
+
+        approval_called = False
+
+        def mock_approval(name, kwargs):
+            nonlocal approval_called
+            approval_called = True
+            return True
+
+        responses = [
+            ModelResponse(
+                content="Reading file.",
+                tool_calls=[ToolCall(name="read_file", arguments={"path": "a.txt"}, id="call_r")],
+            ),
+            ModelResponse(content="Done."),
+        ]
+        client = FakeLLMClient(responses)
+        agent = Agent(client=client, registry=registry, auto_approve=False, approval_callback=mock_approval)
+
+        result = agent.run("Read file")
+
+        self.assertTrue(result.completed)
+        self.assertFalse(approval_called)
+        self.assertEqual(len(read_tool.calls), 1)
+
+    def test_write_tool_approved_by_user(self):
+        """Verify write-capable tool executes when approval callback returns True."""
+        write_tool = FakeTool(name="write_file", return_value="written")
+        write_tool.is_read_only = False
+        registry = ToolRegistry()
+        registry.register(write_tool)
+
+        approval_called = False
+
+        def mock_approval(name, kwargs):
+            nonlocal approval_called
+            approval_called = True
+            return True
+
+        responses = [
+            ModelResponse(
+                content="Writing file.",
+                tool_calls=[ToolCall(name="write_file", arguments={"path": "b.txt"}, id="call_w")],
+            ),
+            ModelResponse(content="Done."),
+        ]
+        client = FakeLLMClient(responses)
+        agent = Agent(client=client, registry=registry, auto_approve=False, approval_callback=mock_approval)
+
+        result = agent.run("Write file")
+
+        self.assertTrue(result.completed)
+        self.assertTrue(approval_called)
+        self.assertEqual(len(write_tool.calls), 1)
+
+    def test_write_tool_denied_by_user(self):
+        """Verify write-capable tool is NOT executed when approval callback returns False."""
+        write_tool = FakeTool(name="write_file", return_value="written")
+        write_tool.is_read_only = False
+        registry = ToolRegistry()
+        registry.register(write_tool)
+
+        def mock_approval(name, kwargs):
+            return False
+
+        responses = [
+            ModelResponse(
+                content="Writing file.",
+                tool_calls=[ToolCall(name="write_file", arguments={"path": "b.txt"}, id="call_w")],
+            ),
+            ModelResponse(content="Handled denial."),
+        ]
+        client = FakeLLMClient(responses)
+        agent = Agent(client=client, registry=registry, auto_approve=False, approval_callback=mock_approval)
+
+        result = agent.run("Write file")
+
+        self.assertTrue(result.completed)
+        self.assertEqual(len(write_tool.calls), 0)
+
+        tool_msg = [m for m in result.messages if m["role"] == "tool"][0]
+        self.assertIn("was denied by user", tool_msg["content"])
+
 
 if __name__ == "__main__":
     unittest.main()
+
