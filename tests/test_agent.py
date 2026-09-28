@@ -328,6 +328,61 @@ class TestAgentLoop(unittest.TestCase):
         self.assertFalse(approval_called)
         self.assertEqual(len(write_tool.calls), 1)
 
+    def test_plan_mode_disables_write_operations(self):
+        """Verify write-capable operations are blocked in plan mode without invoking approval."""
+        write_tool = FakeTool(name="write_file", return_value="written")
+        write_tool.is_read_only = False
+        registry = ToolRegistry()
+        registry.register(write_tool)
+
+        approval_called = False
+
+        def mock_approval(name, kwargs):
+            nonlocal approval_called
+            approval_called = True
+            return True
+
+        responses = [
+            ModelResponse(
+                content="Attempting write in plan mode.",
+                tool_calls=[ToolCall(name="write_file", arguments={"path": "d.txt"}, id="call_plan")],
+            ),
+            ModelResponse(content="Acknowledged disabled tool."),
+        ]
+        client = FakeLLMClient(responses)
+        agent = Agent(client=client, registry=registry, plan_mode=True, approval_callback=mock_approval)
+
+        result = agent.run("Write file in plan mode")
+
+        self.assertTrue(result.completed)
+        self.assertFalse(approval_called)
+        self.assertEqual(len(write_tool.calls), 0)
+
+        tool_msg = [m for m in result.messages if m["role"] == "tool"][0]
+        self.assertIn("disabled in plan mode", tool_msg["content"])
+
+    def test_plan_mode_allows_read_only_operations(self):
+        """Verify read-only tools still execute normally when plan mode is active."""
+        read_tool = FakeTool(name="read_file", return_value="read data")
+        read_tool.is_read_only = True
+        registry = ToolRegistry()
+        registry.register(read_tool)
+
+        responses = [
+            ModelResponse(
+                content="Reading file in plan mode.",
+                tool_calls=[ToolCall(name="read_file", arguments={"path": "e.txt"}, id="call_plan_read")],
+            ),
+            ModelResponse(content="Done reading."),
+        ]
+        client = FakeLLMClient(responses)
+        agent = Agent(client=client, registry=registry, plan_mode=True)
+
+        result = agent.run("Read file in plan mode")
+
+        self.assertTrue(result.completed)
+        self.assertEqual(len(read_tool.calls), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
