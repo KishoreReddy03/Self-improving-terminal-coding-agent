@@ -6,6 +6,7 @@ from coding_agent.config import Config, load_config_from_env
 from coding_agent.models import AgentConfig, AgentResult, ModelResponse, ToolCall
 from coding_agent.parser import ResponseParser, StreamToolCallAccumulator
 from coding_agent.registry import ToolRegistry
+from coding_agent.run_record import RunEvent, RunEventType, RunOutcome, RunRecord
 from coding_agent.tools import EditFileTool, ReadFileTool, ShellCommandTool, Tool, WriteFileTool
 
 __version__ = "0.1.0"
@@ -20,6 +21,10 @@ __all__ = [
     "ModelResponse",
     "ReadFileTool",
     "ResponseParser",
+    "RunEvent",
+    "RunEventType",
+    "RunOutcome",
+    "RunRecord",
     "ShellCommandTool",
     "StreamToolCallAccumulator",
     "Tool",

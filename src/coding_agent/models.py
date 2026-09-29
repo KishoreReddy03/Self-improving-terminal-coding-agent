@@ -1,7 +1,12 @@
 """Data models for the terminal coding agent."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from coding_agent.run_record import RunRecord
 
 
 @dataclass(frozen=True)
@@ -69,5 +74,6 @@ class AgentResult:
     messages: List[Dict[str, Any]] = field(default_factory=list)
     steps_taken: int = 0
     completed: bool = True
+    run_record: Optional["RunRecord"] = None
 
 
