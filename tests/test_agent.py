@@ -383,6 +383,63 @@ class TestAgentLoop(unittest.TestCase):
         self.assertTrue(result.completed)
         self.assertEqual(len(read_tool.calls), 1)
 
+    def test_multiple_write_tools_partial_approval(self):
+        """Verify partial user approval in a single step with multiple write tool calls."""
+        w1 = FakeTool(name="write_a", return_value="res_a", is_read_only=False)
+        w2 = FakeTool(name="write_b", return_value="res_b", is_read_only=False)
+        registry = ToolRegistry()
+        registry.register(w1)
+        registry.register(w2)
+
+        def mock_approval(name, kwargs):
+            return name == "write_a"
+
+        responses = [
+            ModelResponse(
+                content="Writing both.",
+                tool_calls=[
+                    ToolCall(name="write_a", arguments={}, id="c_a"),
+                    ToolCall(name="write_b", arguments={}, id="c_b"),
+                ],
+            ),
+            ModelResponse(content="Handled partial approval."),
+        ]
+        client = FakeLLMClient(responses)
+        agent = Agent(client=client, registry=registry, auto_approve=False, approval_callback=mock_approval)
+
+        result = agent.run("Write both")
+
+        self.assertTrue(result.completed)
+        self.assertEqual(len(w1.calls), 1)
+        self.assertEqual(len(w2.calls), 0)
+
+        tool_msgs = [m for m in result.messages if m["role"] == "tool"]
+        self.assertEqual(len(tool_msgs), 2)
+        self.assertEqual(tool_msgs[0]["content"], "res_a")
+        self.assertIn("was denied by user", tool_msgs[1]["content"])
+
+    def test_tool_returning_non_string_output(self):
+        """Verify tool returning non-string data is automatically JSON serialized in message content."""
+        dict_tool = FakeTool(name="get_dict", return_value={"status": "ok", "code": 200})
+        registry = ToolRegistry()
+        registry.register(dict_tool)
+
+        responses = [
+            ModelResponse(
+                content="Fetching dict.",
+                tool_calls=[ToolCall(name="get_dict", arguments={}, id="c_dict")],
+            ),
+            ModelResponse(content="Got dict."),
+        ]
+        client = FakeLLMClient(responses)
+        agent = Agent(client=client, registry=registry)
+
+        result = agent.run("Fetch dict")
+
+        tool_msg = [m for m in result.messages if m["role"] == "tool"][0]
+        self.assertIn('"status": "ok"', tool_msg["content"])
+        self.assertIn('"code": 200', tool_msg["content"])
+
 
 if __name__ == "__main__":
     unittest.main()

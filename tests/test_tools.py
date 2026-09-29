@@ -175,6 +175,18 @@ class TestWriteFileTool(unittest.TestCase):
         result = self.tool.execute(path="", content="some content")
         self.assertIn("Error: 'path' parameter is required", result)
 
+    def test_write_unicode_content(self):
+        """Verify writing unicode text content containing multi-byte characters."""
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            result = self.tool.execute(path=tmp_path, content="Hello 🚀 世界 UTF-8")
+            self.assertIn("Successfully wrote", result)
+            self.assertEqual(Path(tmp_path).read_text(encoding="utf-8"), "Hello 🚀 世界 UTF-8")
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+
     def test_directory_path_failure(self):
         """Verify error message when target path is a directory."""
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -204,6 +216,19 @@ class TestEditFileTool(unittest.TestCase):
             result = self.tool.execute(path=tmp_path, old_str="bar", new_str="qux")
             self.assertIn("Successfully edited", result)
             self.assertEqual(Path(tmp_path).read_text(encoding="utf-8"), "foo qux baz")
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+
+    def test_multiple_occurrences_string_replacement(self):
+        """Verify exact string replacement updates all occurrences in file."""
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as tmp:
+            tmp.write("apple banana apple cherry apple")
+            tmp_path = tmp.name
+
+        try:
+            result = self.tool.execute(path=tmp_path, old_str="apple", new_str="orange")
+            self.assertIn("replaced 3 occurrence(s)", result)
+            self.assertEqual(Path(tmp_path).read_text(encoding="utf-8"), "orange banana orange cherry orange")
         finally:
             Path(tmp_path).unlink(missing_ok=True)
 
