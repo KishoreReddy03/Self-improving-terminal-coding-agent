@@ -81,3 +81,30 @@ class TrajectoryStore:
     def exists(self, run_id: str) -> bool:
         """Check whether a trajectory file exists for the given run_id."""
         return self.get_path(run_id).is_file()
+
+    def list_run_ids(self) -> List[str]:
+        """List all stored run IDs in sorted order."""
+        if not self.storage_dir.is_dir():
+            return []
+        return sorted([f.stem for f in self.storage_dir.glob("*.json") if f.is_file()])
+
+    def list_records(self) -> List[RunRecord]:
+        """Load and return all valid RunRecords stored in the directory."""
+        records: List[RunRecord] = []
+        for run_id in self.list_run_ids():
+            try:
+                records.append(self.load(run_id))
+            except Exception:
+                pass
+        return records
+
+    def delete(self, run_id: str) -> bool:
+        """Delete a stored trajectory file by run_id if it exists.
+
+        Returns True if deleted, False if file did not exist.
+        """
+        filepath = self.get_path(run_id)
+        if filepath.is_file():
+            filepath.unlink()
+            return True
+        return False
