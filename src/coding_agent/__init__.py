@@ -8,6 +8,7 @@ from coding_agent.parser import ResponseParser, StreamToolCallAccumulator
 from coding_agent.registry import ToolRegistry
 from coding_agent.run_record import RunEvent, RunEventType, RunOutcome, RunRecord
 from coding_agent.tools import EditFileTool, ReadFileTool, ShellCommandTool, Tool, WriteFileTool
+from coding_agent.trajectory_store import TrajectoryStore
 
 __version__ = "0.1.0"
 
@@ -30,6 +31,7 @@ __all__ = [
     "Tool",
     "ToolCall",
     "ToolRegistry",
+    "TrajectoryStore",
     "WriteFileTool",
     "load_config_from_env",
     "__version__",
