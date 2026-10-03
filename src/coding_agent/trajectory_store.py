@@ -42,3 +42,42 @@ class TrajectoryStore:
     def get_path(self, run_id: str) -> Path:
         """Return the file path for a given run_id."""
         return self.storage_dir / f"{run_id}.json"
+
+    def save(self, record: RunRecord) -> Path:
+        """Persist a RunRecord to disk as structured JSON.
+
+        Parameters
+        ----------
+        record:
+            The RunRecord instance to persist.
+
+        Returns
+        -------
+        Path:
+            The file path where the trajectory was written.
+        """
+        self._ensure_directory()
+        filepath = self.get_path(record.run_id)
+        json_data = record.to_json(indent=2)
+        filepath.write_text(json_data, encoding="utf-8")
+        return filepath
+
+    def load(self, run_id: str) -> RunRecord:
+        """Load and deserialise a RunRecord by its run_id.
+
+        Raises
+        ------
+        FileNotFoundError:
+            If no trajectory file exists for the specified run_id.
+        """
+        filepath = self.get_path(run_id)
+        if not filepath.is_file():
+            raise FileNotFoundError(
+                f"No trajectory found for run_id '{run_id}' at {filepath}"
+            )
+        content = filepath.read_text(encoding="utf-8")
+        return RunRecord.from_json(content)
+
+    def exists(self, run_id: str) -> bool:
+        """Check whether a trajectory file exists for the given run_id."""
+        return self.get_path(run_id).is_file()
