@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from coding_agent.agent import Agent
 from coding_agent.config import load_config_from_env
+from coding_agent.trajectory_store import TrajectoryStore
 
 
 PLAN_MODE_DIRECTIVE = (
@@ -14,7 +15,20 @@ PLAN_MODE_DIRECTIVE = (
 )
 
 
-def run_interactive_session(agent: Agent, start_in_plan_mode: bool = False) -> int:
+def _save_trajectory(result_run_record: Any, store: Optional[TrajectoryStore]) -> None:
+    """Helper to save trajectory record safely without crashing on storage errors."""
+    if result_run_record is not None and store is not None:
+        try:
+            store.save(result_run_record)
+        except Exception as err:
+            print(f"\nWarning: Failed to persist trajectory: {err}", file=sys.stderr)
+
+
+def run_interactive_session(
+    agent: Agent,
+    start_in_plan_mode: bool = False,
+    trajectory_store: Optional[TrajectoryStore] = None,
+) -> int:
     """Run interactive REPL terminal loop for the agent."""
     conversation: List[Dict[str, Any]] = []
     plan_mode: bool = start_in_plan_mode
@@ -70,6 +84,7 @@ def run_interactive_session(agent: Agent, start_in_plan_mode: bool = False) -> i
         try:
             result = agent.run(conversation, plan_mode=plan_mode)
             conversation = result.messages
+            _save_trajectory(result.run_record, trajectory_store)
             if result.final_response:
                 print(f"\n{result.final_response}\n")
         except Exception as e:
@@ -85,11 +100,13 @@ def main(args: Optional[List[str]] = None) -> int:
     parser.add_argument("--plan", action="store_true", help="Start in plan mode")
     parser.add_argument("--auto-approve", action="store_true", help="Auto approve write-capable tools without prompting")
     parser.add_argument("--env-file", help="Path to custom .env file")
+    parser.add_argument("--trajectory-dir", help="Custom directory for trajectory JSON storage")
 
     parsed_args = parser.parse_args(args)
 
     config = load_config_from_env(env_path=parsed_args.env_file if parsed_args.env_file else None)
     agent = Agent(config=config, auto_approve=parsed_args.auto_approve, plan_mode=parsed_args.plan)
+    trajectory_store = TrajectoryStore(storage_dir=parsed_args.trajectory_dir)
 
     print("Terminal Coding Agent initialized successfully.")
     print(f"Model Provider URL: {config.provider_url}")
@@ -100,11 +117,14 @@ def main(args: Optional[List[str]] = None) -> int:
         if parsed_args.plan:
             user_content += PLAN_MODE_DIRECTIVE
         result = agent.run(user_content, plan_mode=parsed_args.plan)
+        _save_trajectory(result.run_record, trajectory_store)
         if result.final_response:
             print(f"\n{result.final_response}")
         return 0
 
-    return run_interactive_session(agent, start_in_plan_mode=parsed_args.plan)
+    return run_interactive_session(
+        agent, start_in_plan_mode=parsed_args.plan, trajectory_store=trajectory_store
+    )
 
 
 if __name__ == "__main__":
