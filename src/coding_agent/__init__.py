@@ -3,6 +3,7 @@
 from coding_agent.agent import Agent
 from coding_agent.client import LLMClient
 from coding_agent.config import Config, load_config_from_env
+from coding_agent.evaluator import EvaluationResult, TrajectoryEvaluator
 from coding_agent.models import AgentConfig, AgentResult, ModelResponse, ToolCall
 from coding_agent.parser import ResponseParser, StreamToolCallAccumulator
 from coding_agent.registry import ToolRegistry
@@ -18,6 +19,7 @@ __all__ = [
     "AgentResult",
     "Config",
     "EditFileTool",
+    "EvaluationResult",
     "LLMClient",
     "ModelResponse",
     "ReadFileTool",
@@ -31,6 +33,7 @@ __all__ = [
     "Tool",
     "ToolCall",
     "ToolRegistry",
+    "TrajectoryEvaluator",
     "TrajectoryStore",
     "WriteFileTool",
     "load_config_from_env",
