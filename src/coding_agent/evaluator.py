@@ -143,3 +143,131 @@ class TrajectoryEvaluator:
 
         last_cmd = target_list[-1]
         return True, last_cmd["succeeded"], verification_details
+
+    def evaluate(self, record: RunRecord) -> EvaluationResult:
+        """Evaluate a RunRecord and return a structured EvaluationResult.
+
+        Parameters
+        ----------
+        record:
+            The completed RunRecord trajectory to evaluate.
+
+        Returns
+        -------
+        EvaluationResult
+            Structured result containing success status, score, reason, and details.
+        """
+        # 1. Completion & Step Budget signals
+        completed = record.outcome == RunOutcome.SUCCESS
+        hit_max_steps = record.outcome == RunOutcome.MAX_STEPS_REACHED
+        has_error = record.outcome == RunOutcome.ERROR or len(record.error_events) > 0
+
+        # 2. Tool failure signals
+        total_tool_calls = record.tool_call_count()
+        error_tool_results = record.error_tool_results()
+        failed_tool_count = len(error_tool_results)
+        has_tool_failure = failed_tool_count > 0
+
+        # 3. Verification command signal
+        verification_run, verification_succeeded, verification_details = (
+            self._analyze_verification_commands(record)
+        )
+
+        # 4. Score calculation & Status determination
+        score, success, reasons = self._compute_score_and_status(
+            completed=completed,
+            hit_max_steps=hit_max_steps,
+            has_error=has_error,
+            total_tool_calls=total_tool_calls,
+            failed_tool_count=failed_tool_count,
+            verification_run=verification_run,
+            verification_succeeded=verification_succeeded,
+            error_message=record.error_message,
+        )
+
+        reason_text = " ".join(reasons)
+
+        details = {
+            "completed": completed,
+            "hit_max_steps": hit_max_steps,
+            "has_error": has_error,
+            "error_message": record.error_message,
+            "total_tool_calls": total_tool_calls,
+            "failed_tool_count": failed_tool_count,
+            "has_tool_failure": has_tool_failure,
+            "verification_run": verification_run,
+            "verification_succeeded": verification_succeeded,
+            "verification_details": verification_details,
+            "steps_taken": record.steps_taken,
+        }
+
+        return EvaluationResult(
+            success=success,
+            score=round(score, 2),
+            reason=reason_text,
+            details=details,
+        )
+
+    def _compute_score_and_status(
+        self,
+        completed: bool,
+        hit_max_steps: bool,
+        has_error: bool,
+        total_tool_calls: int,
+        failed_tool_count: int,
+        verification_run: bool,
+        verification_succeeded: Optional[bool],
+        error_message: Optional[str],
+    ) -> Tuple[float, bool, List[str]]:
+        """Compute quantitative score, pass/fail status, and explanation reasons."""
+        reasons: List[str] = []
+        score = 0.0
+
+        if completed:
+            score += 0.5
+            reasons.append("Run completed successfully with a final response.")
+        elif hit_max_steps:
+            reasons.append("Run failed: Hit maximum step iteration limit.")
+        elif has_error:
+            msg = f": {error_message}" if error_message else "."
+            reasons.append(f"Run failed due to unhandled execution error{msg}")
+        else:
+            reasons.append("Run did not reach completion.")
+
+        if not hit_max_steps and not has_error:
+            score += 0.2
+
+        if total_tool_calls > 0:
+            success_ratio = (total_tool_calls - failed_tool_count) / total_tool_calls
+            score += 0.15 * success_ratio
+            if failed_tool_count > 0:
+                reasons.append(
+                    f"{failed_tool_count} of {total_tool_calls} tool call(s) failed."
+                )
+            else:
+                reasons.append(f"All {total_tool_calls} tool call(s) executed cleanly.")
+        else:
+            score += 0.15
+            reasons.append("No tool calls were executed.")
+
+        if verification_run:
+            if verification_succeeded:
+                score += 0.15
+                reasons.append("Final verification command succeeded.")
+            else:
+                reasons.append("Final verification command failed.")
+        else:
+            if completed and failed_tool_count == 0:
+                score += 0.15
+
+        score = max(0.0, min(1.0, score))
+
+        overall_success = (
+            completed
+            and not hit_max_steps
+            and not has_error
+            and failed_tool_count == 0
+            and (verification_succeeded is not False)
+        )
+
+        return score, overall_success, reasons
