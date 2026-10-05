@@ -8,8 +8,14 @@ Reflection is kept strictly decoupled from execution and evaluation.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+
+from coding_agent.client import LLMClient
+from coding_agent.evaluator import EvaluationResult
+from coding_agent.models import ModelResponse
+from coding_agent.run_record import RunEvent, RunEventType, RunRecord
 
 
 @dataclass(frozen=True)
@@ -97,3 +103,42 @@ class ReflectionGenerator:
 
     def __init__(self, client: Optional[LLMClient] = None) -> None:
         self.client = client or LLMClient()
+
+    def _format_reflection_prompt(
+        self, record: RunRecord, evaluation: EvaluationResult
+    ) -> str:
+        """Build the user prompt containing trajectory details and evaluation data."""
+        tool_summary_lines = []
+        for e in record.events:
+            if e.event_type == RunEventType.TOOL_CALL:
+                t_name = e.data.get("tool_name", "")
+                t_args = e.data.get("arguments", {})
+                tool_summary_lines.append(f"- Tool Called: {t_name}({json.dumps(t_args)})")
+            elif e.event_type == RunEventType.TOOL_RESULT:
+                t_name = e.data.get("tool_name", "")
+                is_err = e.data.get("is_error", False)
+                out_snippet = str(e.data.get("output", ""))[:200]
+                status = "ERROR" if is_err else "SUCCESS"
+                tool_summary_lines.append(f"  Result [{status}]: {out_snippet}")
+
+        tool_summary_str = (
+            "\n".join(tool_summary_lines) if tool_summary_lines else "None"
+        )
+
+        prompt = (
+            f"Please analyze the following agent execution trajectory and evaluation:\n\n"
+            f"=== TASK ===\n{record.task}\n\n"
+            f"=== RUN SUMMARY ===\n"
+            f"- Outcome: {record.outcome.value if record.outcome else 'unknown'}\n"
+            f"- Steps Taken: {record.steps_taken}\n"
+            f"- Final Response: {record.final_response or 'None'}\n"
+            f"- Error Message: {record.error_message or 'None'}\n\n"
+            f"=== TOOL USAGE HISTORY ===\n{tool_summary_str}\n\n"
+            f"=== EVALUATION RESULT ===\n"
+            f"- Success: {evaluation.success}\n"
+            f"- Score: {evaluation.score}\n"
+            f"- Reason: {evaluation.reason}\n"
+            f"- Details: {json.dumps(evaluation.details, indent=2)}\n\n"
+            f"Produce your structured JSON reflection now."
+        )
+        return prompt
