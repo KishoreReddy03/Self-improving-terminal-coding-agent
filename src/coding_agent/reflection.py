@@ -70,3 +70,30 @@ class ReflectionResult:
     def from_json(cls, text: str) -> "ReflectionResult":
         """Reconstruct ReflectionResult from a JSON string."""
         return cls.from_dict(json.loads(text))
+
+
+REFLECTION_SYSTEM_PROMPT = (
+    "You are an expert agent performance analyst. Your job is to analyze completed "
+    "agent execution trajectories along with their evaluation results, and output "
+    "a concise, structured JSON retrospective reflection.\n\n"
+    "You MUST respond ONLY with a valid JSON object matching the schema below:\n"
+    "{\n"
+    '  "what_worked": "<Concise summary of successful actions, tools, or decisions>",\n'
+    '  "what_failed": "<Summary of errors, failed tool calls, or limits hit>",\n'
+    '  "why_it_failed": "<Root-cause analysis of why errors or failures occurred>",\n'
+    '  "what_to_do_differently": "<Actionable recommendations for future runs>",\n'
+    '  "summary": "<Overall high-level retrospective summary>"\n'
+    "}"
+)
+
+
+from coding_agent.client import LLMClient
+from coding_agent.evaluator import EvaluationResult
+from coding_agent.run_record import RunRecord
+
+
+class ReflectionGenerator:
+    """Generates structured reflections for completed runs using an LLM model client."""
+
+    def __init__(self, client: Optional[LLMClient] = None) -> None:
+        self.client = client or LLMClient()
