@@ -4,6 +4,7 @@ from coding_agent.agent import Agent
 from coding_agent.client import LLMClient
 from coding_agent.config import Config, load_config_from_env
 from coding_agent.evaluator import EvaluationResult, TrajectoryEvaluator
+from coding_agent.memory import Experience, ExperienceMemory
 from coding_agent.models import AgentConfig, AgentResult, ModelResponse, ToolCall
 from coding_agent.parser import ResponseParser, StreamToolCallAccumulator
 from coding_agent.reflection import ReflectionGenerator, ReflectionResult
@@ -21,6 +22,8 @@ __all__ = [
     "Config",
     "EditFileTool",
     "EvaluationResult",
+    "Experience",
+    "ExperienceMemory",
     "LLMClient",
     "ModelResponse",
     "ReadFileTool",
