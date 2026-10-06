@@ -104,6 +104,35 @@ class ReflectionGenerator:
     def __init__(self, client: Optional[LLMClient] = None) -> None:
         self.client = client or LLMClient()
 
+    def generate(
+        self, record: RunRecord, evaluation: EvaluationResult
+    ) -> ReflectionResult:
+        """Generate a structured reflection given a RunRecord and EvaluationResult.
+
+        Parameters
+        ----------
+        record:
+            The completed agent trajectory record.
+        evaluation:
+            The deterministic EvaluationResult computed for the trajectory.
+
+        Returns
+        -------
+        ReflectionResult
+            Structured reflection containing analysis of worked/failed aspects.
+        """
+        user_prompt = self._format_reflection_prompt(record, evaluation)
+
+        messages = [
+            {"role": "system", "content": REFLECTION_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        response: ModelResponse = self.client.generate_response(messages)
+        content = response.content or ""
+
+        return self._parse_reflection_response(content)
+
     def _format_reflection_prompt(
         self, record: RunRecord, evaluation: EvaluationResult
     ) -> str:
@@ -142,3 +171,36 @@ class ReflectionGenerator:
             f"Produce your structured JSON reflection now."
         )
         return prompt
+
+    def _parse_reflection_response(self, content: str) -> ReflectionResult:
+        """Parse LLM output text into a ReflectionResult dataclass."""
+        cleaned = content.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+            cleaned = re.sub(r"\s*```$", "", cleaned)
+            cleaned = cleaned.strip()
+
+        try:
+            parsed = json.loads(cleaned)
+            if isinstance(parsed, dict):
+                return ReflectionResult(
+                    what_worked=str(parsed.get("what_worked", "")),
+                    what_failed=str(parsed.get("what_failed", "")),
+                    why_it_failed=str(parsed.get("why_it_failed", "")),
+                    what_to_do_differently=str(
+                        parsed.get("what_to_do_differently", "")
+                    ),
+                    summary=str(parsed.get("summary", "")),
+                    raw_response=content,
+                )
+        except Exception:
+            pass
+
+        return ReflectionResult(
+            what_worked=content if content else "N/A",
+            what_failed="N/A",
+            why_it_failed="N/A",
+            what_to_do_differently="N/A",
+            summary=content[:150] if content else "N/A",
+            raw_response=content,
+        )
