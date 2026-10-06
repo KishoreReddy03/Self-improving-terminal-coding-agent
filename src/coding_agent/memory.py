@@ -169,3 +169,73 @@ class ExperienceMemory:
             filepath.unlink()
             return True
         return False
+
+    def retrieve_relevant(
+        self,
+        query_task: str,
+        limit: int = 3,
+        min_score: float = 0.0,
+        only_successful: bool = False,
+    ) -> List[Experience]:
+        """Retrieve the most relevant past experiences for a new task prompt.
+
+        Relevance is calculated using token overlap and keyword matching between
+        the query task and stored experiences, combined with evaluation scores.
+        """
+        all_exp = self.list_experiences()
+        if not all_exp:
+            return []
+
+        filtered = []
+        for exp in all_exp:
+            if exp.evaluation.score < min_score:
+                continue
+            if only_successful and not exp.evaluation.success:
+                continue
+            filtered.append(exp)
+
+        if not filtered:
+            return []
+
+        query_tokens = _tokenize(query_task)
+        if not query_tokens:
+            return filtered[:limit]
+
+        scored_experiences = []
+        for exp in filtered:
+            exp_text = f"{exp.task} {exp.reflection.what_worked} {exp.reflection.summary}"
+            exp_tokens = _tokenize(exp_text)
+
+            intersection = query_tokens.intersection(exp_tokens)
+            overlap_score = (
+                len(intersection) / len(query_tokens) if query_tokens else 0.0
+            )
+
+            # Combine token overlap relevance (70%) with evaluation quality score (30%)
+            total_relevance = (overlap_score * 0.7) + (exp.evaluation.score * 0.3)
+            scored_experiences.append((total_relevance, exp))
+
+        scored_experiences.sort(key=lambda x: x[0], reverse=True)
+        return [exp for _, exp in scored_experiences[:limit]]
+
+
+def _tokenize(text: str) -> Set[str]:
+    """Helper to extract normalized word tokens from text."""
+    words = re.findall(r"\w+", text.lower())
+    stopwords = {
+        "a",
+        "an",
+        "the",
+        "and",
+        "or",
+        "in",
+        "of",
+        "to",
+        "is",
+        "for",
+        "with",
+        "on",
+        "this",
+        "that",
+    }
+    return {w for w in words if len(w) > 1 and w not in stopwords}
