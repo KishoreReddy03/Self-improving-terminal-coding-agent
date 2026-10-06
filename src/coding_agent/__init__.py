@@ -6,6 +6,7 @@ from coding_agent.config import Config, load_config_from_env
 from coding_agent.evaluator import EvaluationResult, TrajectoryEvaluator
 from coding_agent.models import AgentConfig, AgentResult, ModelResponse, ToolCall
 from coding_agent.parser import ResponseParser, StreamToolCallAccumulator
+from coding_agent.reflection import ReflectionGenerator, ReflectionResult
 from coding_agent.registry import ToolRegistry
 from coding_agent.run_record import RunEvent, RunEventType, RunOutcome, RunRecord
 from coding_agent.tools import EditFileTool, ReadFileTool, ShellCommandTool, Tool, WriteFileTool
@@ -24,6 +25,8 @@ __all__ = [
     "ModelResponse",
     "ReadFileTool",
     "ResponseParser",
+    "ReflectionGenerator",
+    "ReflectionResult",
     "RunEvent",
     "RunEventType",
     "RunOutcome",
