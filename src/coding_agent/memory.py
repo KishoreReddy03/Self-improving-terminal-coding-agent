@@ -89,3 +89,83 @@ class Experience:
     def from_json(cls, text: str) -> "Experience":
         """Reconstruct an Experience from a JSON string."""
         return cls.from_dict(json.loads(text))
+
+
+class ExperienceMemory:
+    """Local file-backed long-term memory store for agent experiences."""
+
+    def __init__(self, storage_dir: Optional[Union[str, Path]] = None) -> None:
+        if storage_dir is None:
+            self.storage_dir = Path.home() / ".coding_agent" / "memory"
+        else:
+            self.storage_dir = Path(storage_dir)
+
+    def _ensure_directory(self) -> None:
+        """Create storage directory if missing."""
+        self.storage_dir.mkdir(parents=True, exist_ok=True)
+
+    def get_path(self, experience_id: str) -> Path:
+        """Return expected file path for a given experience_id."""
+        return self.storage_dir / f"{experience_id}.json"
+
+    def save(self, experience: Experience) -> Path:
+        """Persist an Experience instance to local JSON storage."""
+        self._ensure_directory()
+        filepath = self.get_path(experience.experience_id)
+        filepath.write_text(experience.to_json(indent=2), encoding="utf-8")
+        return filepath
+
+    def add(
+        self,
+        task: str,
+        evaluation: EvaluationResult,
+        reflection: ReflectionResult,
+        trajectory_run_id: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Experience:
+        """Convenience helper to create, save, and return a new Experience."""
+        exp = Experience(
+            task=task,
+            evaluation=evaluation,
+            reflection=reflection,
+            trajectory_run_id=trajectory_run_id,
+            metadata=metadata or {},
+        )
+        self.save(exp)
+        return exp
+
+    def get(self, experience_id: str) -> Experience:
+        """Retrieve an Experience by its ID. Raises FileNotFoundError if missing."""
+        filepath = self.get_path(experience_id)
+        if not filepath.is_file():
+            raise FileNotFoundError(
+                f"No experience found with ID '{experience_id}' at {filepath}"
+            )
+        return Experience.from_json(filepath.read_text(encoding="utf-8"))
+
+    def exists(self, experience_id: str) -> bool:
+        """Check if an experience with the given ID exists."""
+        return self.get_path(experience_id).is_file()
+
+    def list_experiences(self) -> List[Experience]:
+        """Load and return all stored experiences."""
+        if not self.storage_dir.is_dir():
+            return []
+        experiences = []
+        for path in self.storage_dir.glob("*.json"):
+            if path.is_file():
+                try:
+                    experiences.append(
+                        Experience.from_json(path.read_text(encoding="utf-8"))
+                    )
+                except Exception:
+                    pass
+        return sorted(experiences, key=lambda e: e.created_at, reverse=True)
+
+    def delete(self, experience_id: str) -> bool:
+        """Delete a stored experience by ID if present."""
+        filepath = self.get_path(experience_id)
+        if filepath.is_file():
+            filepath.unlink()
+            return True
+        return False
