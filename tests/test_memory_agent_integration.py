@@ -71,3 +71,38 @@ class TestAgentMemoryIntegration:
         assert "PRAGMA journal_mode=WAL" in advice_content
         assert "Set timeout parameter on connection" in advice_content
         assert "CSS flexbox" not in advice_content
+
+    def test_agent_ignores_irrelevant_experience(self, memory_with_experiences):
+        mock_client = MagicMock()
+        mock_client.config = AgentConfig()
+        mock_client.generate_response.return_value = ModelResponse(
+            content="Parsing complete."
+        )
+
+        agent = Agent(client=mock_client, memory=memory_with_experiences)
+        # Query task unrelated to database or CSS navbar
+        result = agent.run("Parse abstract syntax tree for Python functions")
+
+        sent_messages = mock_client.generate_response.call_args[1]["messages"]
+        context_msgs = [
+            m for m in sent_messages if "[PAST EXPERIENCE ADVICE" in m.get("content", "")
+        ]
+        assert len(context_msgs) == 0
+
+    def test_agent_runs_normally_when_memory_is_none(self):
+        mock_client = MagicMock()
+        mock_client.config = AgentConfig()
+        mock_client.generate_response.return_value = ModelResponse(
+            content="Task finished."
+        )
+
+        agent = Agent(client=mock_client, memory=None)
+        result = agent.run("Write unit test for calculator")
+
+        # Verify no optional memory context system message was added
+        system_msgs = [
+            m for m in result.messages if "[PAST EXPERIENCE ADVICE" in m.get("content", "")
+        ]
+        assert len(system_msgs) == 0
+        assert result.messages[0]["role"] == "user"
+        assert result.messages[0]["content"] == "Write unit test for calculator"
