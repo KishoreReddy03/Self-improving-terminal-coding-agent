@@ -65,6 +65,7 @@ class Agent:
         plan_mode: Optional[bool] = None,
         auto_approve: Optional[bool] = None,
         approval_callback: Optional[ApprovalCallback] = None,
+        memory: Optional[ExperienceMemory] = None,
     ) -> AgentResult:
         """Run the core agent loop until a final response is generated or max_steps is reached."""
         if isinstance(conversation_or_prompt, str):
