@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Union
 
 from coding_agent.client import LLMClient
-from coding_agent.memory import ExperienceMemory
+from coding_agent.memory import Experience, ExperienceMemory
 from coding_agent.models import AgentConfig, AgentResult, ModelResponse
 from coding_agent.registry import ToolRegistry
 from coding_agent.run_record import RunOutcome, RunRecord
@@ -45,6 +45,18 @@ class Agent:
         self.plan_mode = plan_mode
         self.approval_callback = approval_callback or default_terminal_approval
         self.memory = memory
+
+    def _format_experience_context(self, experiences: List[Experience]) -> str:
+        """Format a small list of past experiences into concise advisory text."""
+        lines = []
+        for i, exp in enumerate(experiences, start=1):
+            lines.append(f"Experience {i}:")
+            lines.append(f"  Task: {exp.task}")
+            if exp.reflection.what_worked:
+                lines.append(f"  What Worked: {exp.reflection.what_worked}")
+            if exp.reflection.what_to_do_differently:
+                lines.append(f"  Advice: {exp.reflection.what_to_do_differently}")
+        return "\n".join(lines)
 
     def run(
         self,
