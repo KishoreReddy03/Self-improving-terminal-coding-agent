@@ -7,6 +7,7 @@ from coding_agent.evaluator import EvaluationResult, TrajectoryEvaluator
 from coding_agent.memory import Experience, ExperienceMemory
 from coding_agent.models import AgentConfig, AgentResult, ModelResponse, ToolCall
 from coding_agent.parser import ResponseParser, StreamToolCallAccumulator
+from coding_agent.pipeline import ExperiencePipeline, PipelineResult
 from coding_agent.reflection import ReflectionGenerator, ReflectionResult
 from coding_agent.registry import ToolRegistry
 from coding_agent.run_record import RunEvent, RunEventType, RunOutcome, RunRecord
@@ -24,8 +25,10 @@ __all__ = [
     "EvaluationResult",
     "Experience",
     "ExperienceMemory",
+    "ExperiencePipeline",
     "LLMClient",
     "ModelResponse",
+    "PipelineResult",
     "ReadFileTool",
     "ResponseParser",
     "ReflectionGenerator",
