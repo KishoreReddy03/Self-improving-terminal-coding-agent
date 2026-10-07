@@ -6,6 +6,9 @@ from typing import Any, Dict, List, Optional
 
 from coding_agent.agent import Agent
 from coding_agent.config import load_config_from_env
+from coding_agent.memory import ExperienceMemory
+from coding_agent.models import AgentResult
+from coding_agent.pipeline import ExperiencePipeline
 from coding_agent.trajectory_store import TrajectoryStore
 
 
@@ -15,19 +18,23 @@ PLAN_MODE_DIRECTIVE = (
 )
 
 
-def _save_trajectory(result_run_record: Any, store: Optional[TrajectoryStore]) -> None:
-    """Helper to save trajectory record safely without crashing on storage errors."""
-    if result_run_record is not None and store is not None:
-        try:
-            store.save(result_run_record)
-        except Exception as err:
-            print(f"\nWarning: Failed to persist trajectory: {err}", file=sys.stderr)
+def _run_pipeline(
+    result: AgentResult,
+    pipeline: Optional[ExperiencePipeline],
+) -> None:
+    """Run the post-run experience pipeline safely without crashing the CLI."""
+    if pipeline is None or result.run_record is None:
+        return
+    try:
+        pipeline.process(result)
+    except Exception as err:
+        print(f"\nWarning: Post-run pipeline failed: {err}", file=sys.stderr)
 
 
 def run_interactive_session(
     agent: Agent,
     start_in_plan_mode: bool = False,
-    trajectory_store: Optional[TrajectoryStore] = None,
+    pipeline: Optional[ExperiencePipeline] = None,
 ) -> int:
     """Run interactive REPL terminal loop for the agent."""
     conversation: List[Dict[str, Any]] = []
@@ -84,7 +91,7 @@ def run_interactive_session(
         try:
             result = agent.run(conversation, plan_mode=plan_mode)
             conversation = result.messages
-            _save_trajectory(result.run_record, trajectory_store)
+            _run_pipeline(result, pipeline)
             if result.final_response:
                 print(f"\n{result.final_response}\n")
         except Exception as e:
@@ -101,29 +108,66 @@ def main(args: Optional[List[str]] = None) -> int:
     parser.add_argument("--auto-approve", action="store_true", help="Auto approve write-capable tools without prompting")
     parser.add_argument("--env-file", help="Path to custom .env file")
     parser.add_argument("--trajectory-dir", help="Custom directory for trajectory JSON storage")
+    parser.add_argument("--memory-dir", help="Custom directory for experience memory storage")
+    parser.add_argument("--no-memory", action="store_true", help="Disable experience memory (no retrieval or storage)")
+    parser.add_argument("--no-reflection", action="store_true", help="Disable LLM reflection generation after each run")
+    parser.add_argument("--only-store-successful", action="store_true", help="Only store experiences from successful runs")
+    parser.add_argument("--verbose-pipeline", action="store_true", help="Print pipeline status messages to stderr")
 
     parsed_args = parser.parse_args(args)
 
     config = load_config_from_env(env_path=parsed_args.env_file if parsed_args.env_file else None)
-    agent = Agent(config=config, auto_approve=parsed_args.auto_approve, plan_mode=parsed_args.plan)
-    trajectory_store = TrajectoryStore(storage_dir=parsed_args.trajectory_dir)
+
+    # Set up memory and pipeline
+    memory: Optional[ExperienceMemory] = None
+    pipeline: Optional[ExperiencePipeline] = None
+
+    if not parsed_args.no_memory:
+        memory = ExperienceMemory(storage_dir=parsed_args.memory_dir)
+        trajectory_store = TrajectoryStore(storage_dir=parsed_args.trajectory_dir)
+        pipeline = ExperiencePipeline(
+            trajectory_store=trajectory_store,
+            memory=memory,
+            only_store_successful=parsed_args.only_store_successful,
+            enable_reflection=not parsed_args.no_reflection,
+            verbose=parsed_args.verbose_pipeline,
+        )
+    else:
+        # Memory disabled — still persist trajectories if a dir was specified
+        trajectory_store = TrajectoryStore(storage_dir=parsed_args.trajectory_dir)
+        pipeline = ExperiencePipeline(
+            trajectory_store=trajectory_store,
+            memory=None,
+            enable_reflection=not parsed_args.no_reflection,
+            verbose=parsed_args.verbose_pipeline,
+        )
+
+    agent = Agent(
+        config=config,
+        auto_approve=parsed_args.auto_approve,
+        plan_mode=parsed_args.plan,
+        memory=memory,
+    )
 
     print("Terminal Coding Agent initialized successfully.")
     print(f"Model Provider URL: {config.provider_url}")
     print(f"Model Name:         {config.model_name}")
+    if memory is not None:
+        memory_dir = memory.storage_dir
+        print(f"Experience Memory:  {memory_dir}")
 
     if parsed_args.prompt:
         user_content = parsed_args.prompt
         if parsed_args.plan:
             user_content += PLAN_MODE_DIRECTIVE
         result = agent.run(user_content, plan_mode=parsed_args.plan)
-        _save_trajectory(result.run_record, trajectory_store)
+        _run_pipeline(result, pipeline)
         if result.final_response:
             print(f"\n{result.final_response}")
         return 0
 
     return run_interactive_session(
-        agent, start_in_plan_mode=parsed_args.plan, trajectory_store=trajectory_store
+        agent, start_in_plan_mode=parsed_args.plan, pipeline=pipeline
     )
 
 
