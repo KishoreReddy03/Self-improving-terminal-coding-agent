@@ -10,6 +10,7 @@ the core agent execution loop.
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -175,6 +176,7 @@ class ExperienceMemory:
         query_task: str,
         limit: int = 3,
         min_score: float = 0.0,
+        min_overlap: float = 0.0,
         only_successful: bool = False,
     ) -> List[Experience]:
         """Retrieve the most relevant past experiences for a new task prompt.
@@ -210,6 +212,9 @@ class ExperienceMemory:
             overlap_score = (
                 len(intersection) / len(query_tokens) if query_tokens else 0.0
             )
+
+            if min_overlap > 0 and overlap_score < min_overlap:
+                continue
 
             # Combine token overlap relevance (70%) with evaluation quality score (30%)
             total_relevance = (overlap_score * 0.7) + (exp.evaluation.score * 0.3)
