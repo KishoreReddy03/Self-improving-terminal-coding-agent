@@ -84,6 +84,29 @@ class Agent:
             if not has_system:
                 messages.insert(0, {"role": "system", "content": self.config.system_prompt})
 
+        # Check experience memory for relevant past context before solving
+        active_memory = memory if memory is not None else self.memory
+        if active_memory is not None and task:
+            relevant_experiences = active_memory.retrieve_relevant(
+                task, limit=2, min_score=0.5, min_overlap=0.01, only_successful=True
+            )
+            if relevant_experiences:
+                memory_context_str = self._format_experience_context(relevant_experiences)
+                context_msg = {
+                    "role": "system",
+                    "content": (
+                        "[PAST EXPERIENCE ADVICE - OPTIONAL CONTEXT]\n"
+                        "The following reflections are from past similar tasks. "
+                        "Use them as advisory context if helpful, but prioritize "
+                        "current user instructions and core system directives:\n\n"
+                        f"{memory_context_str}"
+                    ),
+                }
+                if messages and messages[0].get("role") == "system":
+                    messages.insert(1, context_msg)
+                else:
+                    messages.insert(0, context_msg)
+
         limit = max_steps if max_steps is not None else self.config.max_steps
         is_plan_mode = plan_mode if plan_mode is not None else self.plan_mode
         is_auto_approve = auto_approve if auto_approve is not None else self.auto_approve
