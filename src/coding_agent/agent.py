@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Union
 
 from coding_agent.client import LLMClient
+from coding_agent.memory import ExperienceMemory
 from coding_agent.models import AgentConfig, AgentResult, ModelResponse
 from coding_agent.registry import ToolRegistry
 from coding_agent.run_record import RunOutcome, RunRecord
@@ -35,6 +36,7 @@ class Agent:
         auto_approve: bool = False,
         plan_mode: bool = False,
         approval_callback: Optional[ApprovalCallback] = None,
+        memory: Optional[ExperienceMemory] = None,
     ) -> None:
         self.config = config or (client.config if client else AgentConfig())
         self.client = client or LLMClient(config=self.config)
@@ -42,6 +44,7 @@ class Agent:
         self.auto_approve = auto_approve
         self.plan_mode = plan_mode
         self.approval_callback = approval_callback or default_terminal_approval
+        self.memory = memory
 
     def run(
         self,
