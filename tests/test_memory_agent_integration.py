@@ -106,3 +106,27 @@ class TestAgentMemoryIntegration:
         assert len(system_msgs) == 0
         assert result.messages[0]["role"] == "user"
         assert result.messages[0]["content"] == "Write unit test for calculator"
+
+    def test_past_experience_context_ordering_with_system_prompt(
+        self, memory_with_experiences
+    ):
+        mock_client = MagicMock()
+        config = AgentConfig(system_prompt="You are a senior python expert.")
+        mock_client.config = config
+        mock_client.generate_response.return_value = ModelResponse(
+            content="Database fix applied."
+        )
+
+        agent = Agent(client=mock_client, config=config, memory=memory_with_experiences)
+        result = agent.run("SQLite database WAL mode config")
+
+        sent_messages = mock_client.generate_response.call_args[1]["messages"]
+
+        # System prompt must remain at index 0
+        assert sent_messages[0]["role"] == "system"
+        assert sent_messages[0]["content"] == "You are a senior python expert."
+
+        # Optional context inserted at index 1
+        assert sent_messages[1]["role"] == "system"
+        assert "[PAST EXPERIENCE ADVICE" in sent_messages[1]["content"]
+        assert "prioritize current user instructions and core system directives" in sent_messages[1]["content"]
