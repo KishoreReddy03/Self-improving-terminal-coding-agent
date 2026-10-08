@@ -139,6 +139,15 @@ class TrajectoryStore:
                 pass
         return records
 
+    def count(self) -> int:
+        """Return total number of stored trajectories."""
+        return len(self.list_run_ids())
+
+    def list_records_since(self, min_timestamp: float) -> List[RunRecord]:
+        """Return all valid RunRecords created at or after min_timestamp (POSIX time)."""
+        records = self.list_records()
+        return [r for r in records if r.start_time >= min_timestamp]
+
     def delete(self, run_id: str) -> bool:
         """Delete a stored trajectory file by run_id if it exists.
 
@@ -149,3 +158,4 @@ class TrajectoryStore:
             filepath.unlink()
             return True
         return False
+
