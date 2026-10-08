@@ -62,6 +62,22 @@ class EvaluationResult:
         """Reconstruct EvaluationResult from JSON string."""
         return cls.from_dict(json.loads(text))
 
+    @property
+    def is_clean(self) -> bool:
+        """Return True when the run succeeded with no tool failures and no errors.
+
+        A "clean" run is the highest quality outcome: it completed successfully,
+        hit no step limit, produced no tool errors, and had no runtime exceptions.
+        This is a stricter condition than ``success`` alone.
+        """
+        details = self.details
+        return (
+            self.success
+            and not details.get("hit_max_steps", False)
+            and not details.get("has_error", False)
+            and details.get("failed_tool_count", 0) == 0
+        )
+
 
 from coding_agent.run_record import RunEvent, RunEventType, RunOutcome, RunRecord
 
@@ -207,6 +223,21 @@ class TrajectoryEvaluator:
             reason=reason_text,
             details=details,
         )
+
+    def batch_evaluate(self, records: List[RunRecord]) -> List[EvaluationResult]:
+        """Evaluate a sequence of RunRecords and return results in the same order.
+
+        Parameters
+        ----------
+        records:
+            Sequence of completed ``RunRecord`` objects to evaluate.
+
+        Returns
+        -------
+        List[EvaluationResult]
+            Parallel list of evaluation results, one per record.
+        """
+        return [self.evaluate(record) for record in records]
 
     def _compute_score_and_status(
         self,
