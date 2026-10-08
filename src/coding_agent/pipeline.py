@@ -70,6 +70,12 @@ class PipelineResult:
         """``True`` when no non-fatal errors occurred during processing."""
         return len(self.errors) == 0
 
+    @property
+    def is_actionable(self) -> bool:
+        """Return True when an experience was successfully stored with high confidence."""
+        return self.success and self.experience is not None
+
+
     def to_dict(self) -> Dict[str, Any]:
         """Return a plain dictionary summary of the pipeline result."""
         return {
@@ -240,6 +246,22 @@ class ExperiencePipeline:
             run_record=record,
         )
         return self.process(fake_result)
+
+    def batch_process(self, results: list) -> list:
+        """Process a batch of AgentResult instances in sequence.
+
+        Parameters
+        ----------
+        results:
+            List of completed ``AgentResult`` objects.
+
+        Returns
+        -------
+        list[PipelineResult]
+            Parallel list of pipeline outputs.
+        """
+        return [self.process(res) for res in results]
+
 
     # ---------------------------------------------------------------------- #
     # Private helpers                                                          #
