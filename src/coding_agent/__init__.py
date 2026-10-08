@@ -19,10 +19,12 @@ from coding_agent.weakness_analyzer import (
     TrajectoryEntry,
     WeaknessAnalyzer,
     WeaknessEvidence,
+    WeaknessHistory,
     WeaknessReport,
     WeaknessType,
     format_report,
 )
+
 
 __version__ = "0.1.0"
 
@@ -59,7 +61,9 @@ __all__ = [
     "Severity",
     "WeaknessAnalyzer",
     "WeaknessEvidence",
+    "WeaknessHistory",
     "WeaknessReport",
+
     "WeaknessType",
     "format_report",
     "WriteFileTool",
