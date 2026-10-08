@@ -21,6 +21,7 @@ from coding_agent.weakness_analyzer import (
     WeaknessEvidence,
     WeaknessReport,
     WeaknessType,
+    format_report,
 )
 
 __version__ = "0.1.0"
@@ -60,6 +61,7 @@ __all__ = [
     "WeaknessEvidence",
     "WeaknessReport",
     "WeaknessType",
+    "format_report",
     "WriteFileTool",
     "load_config_from_env",
     "__version__",
