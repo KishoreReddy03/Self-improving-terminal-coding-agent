@@ -194,6 +194,74 @@ class WeaknessReport:
     def to_json(self, **kwargs: Any) -> str:
         return json.dumps(self.to_dict(), **kwargs)
 
+    def get_by_type(self, weakness_type: WeaknessType) -> Optional[ImprovementProposal]:
+        """Return the proposal for a specific weakness type, or None if absent."""
+        for p in self.proposals:
+            if p.weakness_type == weakness_type:
+                return p
+        return None
+
+    def to_markdown(self) -> str:
+        """Render the report as a GitHub-flavored Markdown document.
+
+        Suitable for writing to a file, a PR comment, or any Markdown viewer.
+        """
+        lines: List[str] = [
+            "# Weakness Analysis Report",
+            "",
+            f"**Corpus size:** {self.corpus_size} trajectories  ",
+            f"**Proposals:** {len(self.proposals)}",
+            "",
+            "## Summary",
+            "",
+            self.summary,
+            "",
+        ]
+        if not self.proposals:
+            return "\n".join(lines)
+
+        lines.append("## Improvement Proposals")
+        lines.append("")
+
+        for i, proposal in enumerate(self.proposals, start=1):
+            severity_badge = {
+                Severity.HIGH: "🔴 HIGH",
+                Severity.MEDIUM: "🟡 MEDIUM",
+                Severity.LOW: "🟢 LOW",
+            }.get(proposal.severity, proposal.severity.value)
+
+            lines += [
+                f"### {i}. `{proposal.weakness_type.value}` — {severity_badge}",
+                "",
+                f"**Prevalence:** {proposal.affected_run_count}/{proposal.corpus_size} runs "
+                f"({proposal.prevalence:.0%})",
+                "",
+                f"**Observed Problem:**  ",
+                proposal.observed_problem,
+                "",
+                f"**Likely Cause:**  ",
+                proposal.likely_cause,
+                "",
+                f"**Proposed Improvement:**  ",
+                proposal.proposed_improvement,
+                "",
+                f"**Expected Benefit:**  ",
+                proposal.expected_benefit,
+                "",
+                f"**Risk:**  ",
+                proposal.risk,
+                "",
+            ]
+
+            if proposal.evidence:
+                lines.append("**Evidence:**")
+                lines.append("")
+                for ev in proposal.evidence:
+                    lines.append(f"- `{ev.run_id[:8]}…` — {ev.detail}")
+                lines.append("")
+
+        return "\n".join(lines)
+
 
 # ---------------------------------------------------------------------------
 # Trajectory pair helper
@@ -801,6 +869,46 @@ class WeaknessAnalyzer:
         ]
         return self.analyse(entries)
 
+    def analyse_from_store(
+        self,
+        store: "Any",
+        limit: Optional[int] = None,
+    ) -> WeaknessReport:
+        """Load all trajectories from a ``TrajectoryStore`` and analyse them.
+
+        This is a convenience entry-point for running weakness analysis
+        directly against stored trajectories without manually loading them.
+
+        Parameters
+        ----------
+        store:
+            A ``TrajectoryStore`` instance to load ``RunRecord`` objects from.
+        limit:
+            If provided, only the most recently stored *limit* trajectories
+            are analysed (avoids loading very large stores).
+
+        Returns
+        -------
+        WeaknessReport
+            Analysis result for the loaded corpus.
+        """
+        records = store.list_records()
+        if limit is not None:
+            records = records[-limit:]
+
+        evaluations: List[Optional[EvaluationResult]] = []
+        for record in records:
+            eval_dict = record.metadata.get("evaluation")
+            if eval_dict and isinstance(eval_dict, dict):
+                try:
+                    evaluations.append(EvaluationResult.from_dict(eval_dict))
+                    continue
+                except Exception:
+                    pass
+            evaluations.append(None)
+
+        return self.analyse_records(records, evaluations)
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
@@ -888,3 +996,66 @@ class WeaknessAnalyzer:
         )
 
         return " ".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Module-level formatting helper
+# ---------------------------------------------------------------------------
+
+
+def format_report(report: WeaknessReport, width: int = 80) -> str:
+    """Return a concise, human-readable plain-text summary of a WeaknessReport.
+
+    Designed for terminal / log output where Markdown rendering is not
+    available.  Each proposal is rendered as a labelled block with a
+    horizontal separator.
+
+    Parameters
+    ----------
+    report:
+        The ``WeaknessReport`` to format.
+    width:
+        Target column width for separator lines.
+
+    Returns
+    -------
+    str
+        Formatted multi-line string ready for ``print()`` or logging.
+    """
+    sep = "─" * width
+    lines: List[str] = [
+        sep,
+        f"  WEAKNESS ANALYSIS REPORT  ({report.corpus_size} trajectories analysed)",
+        sep,
+        "",
+        report.summary,
+        "",
+    ]
+
+    if not report.proposals:
+        lines.append(sep)
+        return "\n".join(lines)
+
+    for i, p in enumerate(report.proposals, start=1):
+        severity_label = f"[{p.severity.value.upper()}]"
+        lines += [
+            sep,
+            f"  #{i}  {p.weakness_type.value}  {severity_label}  "
+            f"({p.affected_run_count}/{p.corpus_size} runs, {p.prevalence:.0%})",
+            sep,
+            "",
+            f"  PROBLEM:     {p.observed_problem}",
+            f"  CAUSE:       {p.likely_cause}",
+            f"  FIX:         {p.proposed_improvement}",
+            f"  BENEFIT:     {p.expected_benefit}",
+            f"  RISK:        {p.risk}",
+            "",
+        ]
+        if p.evidence:
+            lines.append("  EVIDENCE:")
+            for ev in p.evidence:
+                lines.append(f"    • [{ev.run_id[:8]}…] {ev.detail}")
+            lines.append("")
+
+    lines.append(sep)
+    return "\n".join(lines)
