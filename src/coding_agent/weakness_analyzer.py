@@ -618,8 +618,9 @@ def _detect_missing_error_handling(
                     task_snippet=entry.task_snippet,
                     detail=(
                         f"Run concluded with an unhandled tool error in step "
-                        f"{last_result.step_index}: {last_result.data.get('output', '')[:100]}"
+                        f"{last_result.step}: {last_result.data.get('output', '')[:100]}"
                     ),
+
                     metrics={
                         "total_errors": len(errors),
                         "final_step_error": True,

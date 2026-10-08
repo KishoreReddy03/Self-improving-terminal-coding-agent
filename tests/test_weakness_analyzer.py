@@ -819,3 +819,67 @@ class TestAnalyseFromStore:
         # Should not raise
         report = WeaknessAnalyzer().analyse_from_store(store)
         assert report.corpus_size == 1
+
+
+# ===========================================================================
+# WeaknessHistory and Missing Error Handling
+# ===========================================================================
+
+
+class TestWeaknessHistory:
+    def test_add_snapshot_and_recurring(self):
+        from coding_agent.weakness_analyzer import WeaknessHistory
+        history = WeaknessHistory()
+        assert history.latest_report is None
+
+        r1 = _make_report_with_proposal(WeaknessType.POOR_VERIFICATION)
+        r2 = _make_report_with_proposal(WeaknessType.POOR_VERIFICATION)
+        history.add_snapshot(r1, timestamp=100.0)
+        history.add_snapshot(r2, timestamp=200.0)
+
+        assert history.latest_report == r2
+        assert history.get_recurring_weaknesses(min_occurrences=2) == [WeaknessType.POOR_VERIFICATION]
+
+    def test_get_resolved_weaknesses(self):
+        from coding_agent.weakness_analyzer import WeaknessHistory
+        history = WeaknessHistory()
+        r1 = _make_report_with_proposal(WeaknessType.BAD_TOOL_SELECTION)
+        r2 = WeaknessReport(proposals=[], corpus_size=1, analysed_run_ids=["r2"], summary="")
+        history.add_snapshot(r1)
+        history.add_snapshot(r2)
+
+        resolved = history.get_resolved_weaknesses()
+        assert resolved == [WeaknessType.BAD_TOOL_SELECTION]
+
+    def test_history_to_dict(self):
+        from coding_agent.weakness_analyzer import WeaknessHistory
+        history = WeaknessHistory()
+        r1 = _make_report_with_proposal(WeaknessType.POOR_VERIFICATION)
+        history.add_snapshot(r1, timestamp=123.4)
+        data = history.to_dict()
+        assert data["snapshot_count"] == 1
+        assert data["snapshots"][0]["timestamp"] == 123.4
+
+
+def _make_report_with_proposal(wtype: WeaknessType) -> WeaknessReport:
+    ev = WeaknessEvidence(run_id="r1", task_snippet="t", detail="d")
+    proposal = ImprovementProposal(
+        weakness_type=wtype,
+        severity=Severity.MEDIUM,
+        observed_problem="p",
+        evidence=[ev],
+        affected_run_count=1,
+        corpus_size=2,
+        prevalence=0.5,
+        likely_cause="c",
+        proposed_improvement="i",
+        expected_benefit="b",
+        risk="r",
+    )
+    return WeaknessReport(
+        proposals=[proposal],
+        corpus_size=2,
+        analysed_run_ids=["r1"],
+        summary="s",
+    )
+

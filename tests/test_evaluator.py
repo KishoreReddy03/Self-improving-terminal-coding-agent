@@ -194,3 +194,32 @@ class TestTrajectoryEvaluator:
         assert eval_res.details["verification_run"] is True
         assert eval_res.details["verification_succeeded"] is False
         assert "Final verification command failed" in eval_res.reason
+
+    def test_is_clean_property(self, evaluator):
+        clean_res = EvaluationResult(
+            success=True,
+            score=1.0,
+            reason="Clean",
+            details={"hit_max_steps": False, "has_error": False, "failed_tool_count": 0},
+        )
+        assert clean_res.is_clean is True
+
+        dirty_res = EvaluationResult(
+            success=True,
+            score=0.7,
+            reason="1 tool error",
+            details={"hit_max_steps": False, "has_error": False, "failed_tool_count": 1},
+        )
+        assert dirty_res.is_clean is False
+
+    def test_batch_evaluate(self, evaluator):
+        r1 = RunRecord(task="t1")
+        r1.outcome = RunOutcome.SUCCESS
+        r2 = RunRecord(task="t2")
+        r2.outcome = RunOutcome.MAX_STEPS_REACHED
+
+        results = evaluator.batch_evaluate([r1, r2])
+        assert len(results) == 2
+        assert results[0].success is True
+        assert results[1].success is False
+
