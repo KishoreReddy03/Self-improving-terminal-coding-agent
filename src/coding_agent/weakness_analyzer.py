@@ -1113,3 +1113,67 @@ def format_report(report: WeaknessReport, width: int = 80) -> str:
 
     lines.append(sep)
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Weakness Trend Tracker
+# ---------------------------------------------------------------------------
+
+
+class WeaknessHistory:
+    """Track weakness trends over sequential WeaknessReport snapshots.
+
+    Allows tracking which weaknesses persist across evaluations and which
+    have been successfully mitigated.
+    """
+
+    def __init__(self) -> None:
+        self.snapshots: List[Tuple[float, WeaknessReport]] = []
+
+    def add_snapshot(
+        self,
+        report: WeaknessReport,
+        timestamp: Optional[float] = None,
+    ) -> None:
+        """Add a report snapshot to history."""
+        import time
+
+        ts = timestamp if timestamp is not None else time.time()
+        self.snapshots.append((ts, report))
+
+    @property
+    def latest_report(self) -> Optional[WeaknessReport]:
+        """Return the most recent report in history, if any."""
+        return self.snapshots[-1][1] if self.snapshots else None
+
+    def get_recurring_weaknesses(self, min_occurrences: int = 2) -> List[WeaknessType]:
+        """Return weakness types that appear in at least `min_occurrences` snapshots."""
+        counts: Counter = Counter()
+        for _, report in self.snapshots:
+            for proposal in report.proposals:
+                counts[proposal.weakness_type] += 1
+        return [w for w, c in counts.items() if c >= min_occurrences]
+
+    def get_resolved_weaknesses(self) -> List[WeaknessType]:
+        """Return weakness types present in earlier snapshots but absent in latest."""
+        if len(self.snapshots) < 2:
+            return []
+
+        latest_types = {p.weakness_type for p in self.snapshots[-1][1].proposals}
+        earlier_types: set = set()
+        for _, report in self.snapshots[:-1]:
+            for p in report.proposals:
+                earlier_types.add(p.weakness_type)
+
+        return sorted(list(earlier_types - latest_types))
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Export history to dictionary format."""
+        return {
+            "snapshot_count": len(self.snapshots),
+            "snapshots": [
+                {"timestamp": ts, "report": rep.to_dict()}
+                for ts, rep in self.snapshots
+            ],
+        }
+
