@@ -171,6 +171,39 @@ class ExperienceMemory:
             return True
         return False
 
+    def prune(
+        self,
+        min_score: float = 0.0,
+        only_failed: bool = False,
+    ) -> int:
+        """Remove experiences matching specified pruning criteria.
+
+        Parameters
+        ----------
+        min_score:
+            Remove any experience with evaluation score strictly below this threshold.
+        only_failed:
+            If True, only remove failed experiences (evaluation.success is False).
+
+        Returns
+        -------
+        int
+            Number of experiences successfully removed from storage.
+        """
+        deleted_count = 0
+        for exp in self.list_experiences():
+            should_remove = False
+            if exp.evaluation.score < min_score:
+                should_remove = True
+            if only_failed and not exp.evaluation.success:
+                should_remove = True
+
+            if should_remove:
+                if self.delete(exp.experience_id):
+                    deleted_count += 1
+        return deleted_count
+
+
     def retrieve_relevant(
         self,
         query_task: str,
