@@ -618,3 +618,204 @@ class TestWeaknessAnalyzerAnalyse:
         assert "proposals" in data
         assert "corpus_size" in data
         assert data["corpus_size"] == 3
+
+
+# ===========================================================================
+# WeaknessReport.get_by_type
+# ===========================================================================
+
+
+class TestWeaknessReportGetByType:
+    def _make_report_with_proposal(self, wtype: WeaknessType) -> WeaknessReport:
+        ev = WeaknessEvidence(run_id="r1", task_snippet="t", detail="d")
+        proposal = ImprovementProposal(
+            weakness_type=wtype,
+            severity=Severity.MEDIUM,
+            observed_problem="p",
+            evidence=[ev],
+            affected_run_count=1,
+            corpus_size=2,
+            prevalence=0.5,
+            likely_cause="c",
+            proposed_improvement="i",
+            expected_benefit="b",
+            risk="r",
+        )
+        return WeaknessReport(
+            proposals=[proposal],
+            corpus_size=2,
+            analysed_run_ids=["r1"],
+            summary="s",
+        )
+
+    def test_get_by_type_returns_matching_proposal(self):
+        report = self._make_report_with_proposal(WeaknessType.POOR_VERIFICATION)
+        result = report.get_by_type(WeaknessType.POOR_VERIFICATION)
+        assert result is not None
+        assert result.weakness_type == WeaknessType.POOR_VERIFICATION
+
+    def test_get_by_type_returns_none_for_absent_type(self):
+        report = self._make_report_with_proposal(WeaknessType.POOR_VERIFICATION)
+        assert report.get_by_type(WeaknessType.BAD_TOOL_SELECTION) is None
+
+    def test_get_by_type_on_empty_proposals(self):
+        report = WeaknessReport(proposals=[], corpus_size=0, analysed_run_ids=[], summary="")
+        assert report.get_by_type(WeaknessType.FAILURE_TO_RECOVER) is None
+
+
+# ===========================================================================
+# WeaknessReport.to_markdown
+# ===========================================================================
+
+
+class TestWeaknessReportToMarkdown:
+    def _make_populated_report(self) -> WeaknessReport:
+        entries = []
+        for _ in range(5):
+            r = _base_record("Write feature code")
+            cid = _add_tool_call(r, "write_file", {"path": "f.py", "content": "x"})
+            _add_tool_result(r, "write_file", cid)
+            r.record_final_response("Done")
+            entries.append(_entry(r))
+        return WeaknessAnalyzer().analyse(entries)
+
+    def test_to_markdown_is_string(self):
+        report = self._make_populated_report()
+        md = report.to_markdown()
+        assert isinstance(md, str)
+
+    def test_to_markdown_contains_header(self):
+        report = self._make_populated_report()
+        md = report.to_markdown()
+        assert "# Weakness Analysis Report" in md
+
+    def test_to_markdown_contains_corpus_size(self):
+        report = self._make_populated_report()
+        md = report.to_markdown()
+        assert "5" in md  # corpus size
+
+    def test_to_markdown_contains_proposal_headings(self):
+        report = self._make_populated_report()
+        md = report.to_markdown()
+        assert "###" in md  # at least one proposal heading
+
+    def test_to_markdown_contains_severity_badge(self):
+        report = self._make_populated_report()
+        md = report.to_markdown()
+        assert "HIGH" in md or "MEDIUM" in md or "LOW" in md
+
+    def test_to_markdown_empty_report_no_proposals_section(self):
+        report = WeaknessReport(proposals=[], corpus_size=2, analysed_run_ids=[], summary="Clean")
+        md = report.to_markdown()
+        assert "## Improvement Proposals" not in md
+        assert "# Weakness Analysis Report" in md
+
+    def test_to_markdown_contains_evidence(self):
+        report = self._make_populated_report()
+        md = report.to_markdown()
+        if report.proposals and report.proposals[0].evidence:
+            assert "Evidence" in md
+
+
+# ===========================================================================
+# format_report module-level function
+# ===========================================================================
+
+
+class TestFormatReport:
+    def _import_format_report(self):
+        from coding_agent.weakness_analyzer import format_report
+        return format_report
+
+    def test_format_report_returns_string(self):
+        format_report = self._import_format_report()
+        report = WeaknessReport(proposals=[], corpus_size=0, analysed_run_ids=[], summary="All good")
+        output = format_report(report)
+        assert isinstance(output, str)
+
+    def test_format_report_contains_header(self):
+        format_report = self._import_format_report()
+        report = WeaknessReport(proposals=[], corpus_size=5, analysed_run_ids=[], summary="All good")
+        output = format_report(report)
+        assert "WEAKNESS ANALYSIS REPORT" in output
+        assert "5" in output
+
+    def test_format_report_contains_severity_label(self):
+        format_report = self._import_format_report()
+        entries = []
+        for _ in range(6):
+            r = _base_record("Write code")
+            cid = _add_tool_call(r, "write_file", {"path": "a.py", "content": "x"})
+            _add_tool_result(r, "write_file", cid)
+            r.record_final_response("Done")
+            entries.append(_entry(r))
+        report = WeaknessAnalyzer().analyse(entries)
+        output = format_report(report)
+        assert "[HIGH]" in output or "[MEDIUM]" in output or "[LOW]" in output
+
+    def test_format_report_contains_evidence_bullet(self):
+        format_report = self._import_format_report()
+        entries = []
+        for _ in range(4):
+            r = _base_record("Write code")
+            cid = _add_tool_call(r, "write_file", {"path": "a.py", "content": "x"})
+            _add_tool_result(r, "write_file", cid)
+            r.record_final_response("Done")
+            entries.append(_entry(r))
+        report = WeaknessAnalyzer().analyse(entries)
+        output = format_report(report)
+        # If there are proposals with evidence, expect evidence bullets
+        if any(p.evidence for p in report.proposals):
+            assert "EVIDENCE:" in output
+
+    def test_format_report_custom_width(self):
+        format_report = self._import_format_report()
+        report = WeaknessReport(proposals=[], corpus_size=1, analysed_run_ids=[], summary="x")
+        output = format_report(report, width=40)
+        assert "─" * 40 in output
+
+
+# ===========================================================================
+# WeaknessAnalyzer.analyse_from_store
+# ===========================================================================
+
+
+class TestAnalyseFromStore:
+    def test_analyse_from_store_empty_store(self, tmp_path):
+        from coding_agent.trajectory_store import TrajectoryStore
+        store = TrajectoryStore(storage_dir=tmp_path / "traj")
+        report = WeaknessAnalyzer().analyse_from_store(store)
+        assert report.corpus_size == 0
+        assert report.proposals == []
+
+    def test_analyse_from_store_with_trajectories(self, tmp_path):
+        from coding_agent.trajectory_store import TrajectoryStore
+        store = TrajectoryStore(storage_dir=tmp_path / "traj")
+        for i in range(4):
+            r = _base_record(f"Task {i}")
+            cid = _add_tool_call(r, "write_file", {"path": "a.py", "content": "x"})
+            _add_tool_result(r, "write_file", cid)
+            r.record_final_response("Done")
+            store.save(r)
+        report = WeaknessAnalyzer().analyse_from_store(store)
+        assert report.corpus_size == 4
+
+    def test_analyse_from_store_limit_respected(self, tmp_path):
+        from coding_agent.trajectory_store import TrajectoryStore
+        store = TrajectoryStore(storage_dir=tmp_path / "traj")
+        for i in range(10):
+            r = _base_record(f"Task {i}")
+            store.save(r)
+        report = WeaknessAnalyzer().analyse_from_store(store, limit=3)
+        assert report.corpus_size == 3
+
+    def test_analyse_from_store_reads_embedded_evaluation(self, tmp_path):
+        from coding_agent.trajectory_store import TrajectoryStore
+        from coding_agent.evaluator import EvaluationResult
+        store = TrajectoryStore(storage_dir=tmp_path / "traj")
+        eval_result = EvaluationResult(success=True, score=0.9, reason="clean")
+        r = _base_record("Task with eval")
+        store.save(r, evaluation=eval_result)
+        # Should not raise
+        report = WeaknessAnalyzer().analyse_from_store(store)
+        assert report.corpus_size == 1
