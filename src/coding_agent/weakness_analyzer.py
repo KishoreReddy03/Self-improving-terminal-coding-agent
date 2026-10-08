@@ -54,6 +54,7 @@ class WeaknessType(str, Enum):
     INEFFICIENT_PLANNING = "inefficient_planning"
     BAD_TOOL_SELECTION = "bad_tool_selection"
     FAILURE_TO_RECOVER = "failure_to_recover"
+    MISSING_ERROR_HANDLING = "missing_error_handling"
 
 
 class Severity(str, Enum):
@@ -594,6 +595,42 @@ def _detect_failure_to_recover(
     return hits
 
 
+def _detect_missing_error_handling(
+    entries: List[TrajectoryEntry],
+) -> List[WeaknessEvidence]:
+    """Detect runs that ended with tool errors left completely unhandled."""
+    hits: List[WeaknessEvidence] = []
+    for entry in entries:
+        record = entry.record
+        if not record.tool_results:
+            continue
+
+        errors = [r for r in record.tool_results if r.data.get("is_error", False)]
+        if not errors:
+            continue
+
+        # Check if the final tool call resulted in an unhandled error
+        last_result = record.tool_results[-1]
+        if last_result.data.get("is_error", False):
+            hits.append(
+                WeaknessEvidence(
+                    run_id=entry.run_id,
+                    task_snippet=entry.task_snippet,
+                    detail=(
+                        f"Run concluded with an unhandled tool error in step "
+                        f"{last_result.step_index}: {last_result.data.get('output', '')[:100]}"
+                    ),
+                    metrics={
+                        "total_errors": len(errors),
+                        "final_step_error": True,
+                        "error_output_snippet": str(last_result.data.get("output", ""))[:100],
+                    },
+                )
+            )
+    return hits
+
+
+
 # ---------------------------------------------------------------------------
 # Severity computation
 # ---------------------------------------------------------------------------
@@ -736,6 +773,22 @@ _PROPOSALS: Dict[WeaknessType, Dict[str, str]] = {
             "(e.g. polling for a build to finish)."
         ),
     },
+    WeaknessType.MISSING_ERROR_HANDLING: {
+        "likely_cause": (
+            "The agent encounters a tool error or failed command execution near the end "
+            "of a run and ignores the error, marking the run as successful without addressing it."
+        ),
+        "proposed_improvement": (
+            "Add a system-prompt rule: 'If any tool call returns an error or non-zero exit code, "
+            "you must resolve or explain the failure before completing the task. Never ignore an unhandled error.'"
+        ),
+        "expected_benefit": (
+            "Higher delivery quality and fewer unaddressed execution failures."
+        ),
+        "risk": (
+            "The agent might spend excessive steps attempting to fix benign or expected errors."
+        ),
+        },
 }
 
 
@@ -799,6 +852,7 @@ class WeaknessAnalyzer:
             (WeaknessType.INEFFICIENT_PLANNING, _detect_inefficient_planning),
             (WeaknessType.BAD_TOOL_SELECTION, _detect_bad_tool_selection),
             (WeaknessType.FAILURE_TO_RECOVER, _detect_failure_to_recover),
+            (WeaknessType.MISSING_ERROR_HANDLING, _detect_missing_error_handling),
         ]
 
         proposals: List[ImprovementProposal] = []
